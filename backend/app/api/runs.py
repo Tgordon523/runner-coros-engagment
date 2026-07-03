@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..deps import get_store
 from ..filters import RunFilter, run_filter
+from ..privacy import apply_privacy_zones
 from ..store import Store
 
 router = APIRouter(prefix="/api", tags=["runs"])
@@ -33,6 +34,10 @@ def run_track(run_id: int, store: Store = Depends(get_store)) -> list[dict]:
 def tracks(
     f: RunFilter = Depends(run_filter),
     max_points: Annotated[int, Query(ge=1_000, le=2_000_000)] = 150_000,
+    privacy: bool = False,
     store: Store = Depends(get_store),
 ) -> list[dict]:
-    return store.tracks(f, max_points)
+    result = store.tracks(f, max_points)
+    if privacy:
+        result = apply_privacy_zones(result, store.privacy_zones())
+    return result

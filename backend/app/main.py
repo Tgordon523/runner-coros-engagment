@@ -3,7 +3,7 @@ import threading
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import dashboard, runs, settings, sync
+from .api import dashboard, export, runs, settings, sync
 from .config import DB_PATH, FIT_DIR
 from .ingest import service
 from .store import Store
@@ -21,6 +21,7 @@ app.include_router(sync.router)
 app.include_router(runs.router)
 app.include_router(dashboard.router)
 app.include_router(settings.router)
+app.include_router(export.router)
 
 
 @app.on_event("startup")

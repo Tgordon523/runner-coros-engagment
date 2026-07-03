@@ -17,81 +17,99 @@ make up
 - Frontend: http://localhost:5173
 - API: http://localhost:8000/api/health
 
+Backend tests: `docker compose exec backend sh -c "cd /app && python -m pytest tests"`
+Frontend tests: `docker compose exec frontend sh -c "cd /app && npm test"`
+
 ## Roadmap
 
 | Phase | Status | Delivers |
 |-------|--------|----------|
 | 1 — Skeleton | ✅ done | Docker compose, FastAPI + SQLite schema, React/MapLibre map shell |
-| 2 — Ingestion | 🔜 next | COROS fetcher, FIT parser, `POST /api/sync` |
-| 3 — Runs API + filters | planned | Period / Day / Effort / Distance / Time-of-day / Sport filtering |
-| 4 — Map views | planned | Heatmap, HR/pace gradient trails, aligned-start timelapse |
-| 5 — Dashboard | planned | Weekly mileage + cumulative, pace trend, adjustable annual goal with on-track projection |
-| 6 — Art export | planned | Privacy-zone trim, MP4 render of timelapse |
+| 2 — Ingestion | ✅ done | COROS fetcher, FIT parser, `POST /api/sync` |
+| 3 — Runs API + filters | ✅ done | Period / Day / Effort / Distance / Time-of-day / Sport filtering behind Store + RunFilter |
+| 4 — Map views | ✅ done | Heatmap, HR/pace gradient trails, aligned-start timelapse |
+| 5 — Dashboard | ✅ done | Weekly/cumulative/pace charts, goal card, settings UI over `/api/dashboard` + `/api/settings` |
+| 6 — Art export | ✅ done | Privacy-zone trim, timelapse recording, MP4 download |
 
 Post-v1 backlog: chronological timelapse mode, effort distribution chart, poster grid,
 elevation gradient trails, calendar feature, race-training goals.
 
-### Phase 1 — Skeleton (done)
+### Phase 1 — Skeleton ✅
 
-Runnable end-to-end shell.
-
-- **Docker compose** with two services: `backend` (FastAPI on :8000) and `frontend`
-  (Vite dev server on :5173). Code is volume-mounted for hot reload; `data/` is
-  volume-mounted into the backend.
-- **Backend** (`backend/app/`): FastAPI app with `GET /api/health`; SQLite database
-  created on startup at `data/app.db` with the full v1 schema (`runs`, `track_points`,
-  `settings`, `sync_log` — see `backend/app/db.py`); effort-bucket thresholds in
-  `backend/app/config.py` (avg HR as % of max HR 190: easy <70%, moderate 70–80%,
-  hard 80–90%, max >90%).
-- **Frontend** (`frontend/src/`): React + MapLibre dark basemap, deck.gl dependency in
-  place for later map layers, small `api.ts` fetch helper.
-- **`data/fit/`**: the ingestion contract folder — every FIT file here becomes a run,
-  regardless of how it arrived.
+Docker compose (`backend` FastAPI :8000, `frontend` Vite :5173, hot reload via bind
+mounts, `data/` volume), SQLite schema created on startup, React + MapLibre dark
+basemap shell.
 
 macOS note (OrbStack/Docker Desktop): the app must have Files-and-Folders permission
 for the folder holding this repo, or bind mounts fail with "Operation not permitted".
 
-### Phase 2 — Ingestion (next)
+### Phase 2 — Ingestion ✅
 
-Turns FIT files into queryable runs.
+- **Fetcher** (`ingest/fetcher.py`): wraps `corosexport` using `COROS_EMAIL` /
+  `COROS_PASSWORD` from `.env`, downloading run FIT files into `data/fit/`. Unofficial
+  API (ADR 0001); failures land in `sync_log` and never block ingest. Fallback:
+  unzip an official Training Hub bulk export into the same folder.
+- **Parser** (`ingest/parser.py`): `fitdecode` → `ParsedRun`; pure
+  `derive.summarize` derives local date, day-of-week, time-of-day, and pace.
+  Idempotent by filename — re-drops and bulk zips are safe.
+- **API**: `POST /api/sync`, `GET /api/sync/status`; sync also runs on startup.
 
-- **Fetcher**: wraps `corosexport` using `COROS_EMAIL`/`COROS_PASSWORD` from `.env` to
-  download new FIT files from COROS Training Hub into `data/fit/`. Uses an unofficial
-  API (see ADR 0001); failures are recorded in `sync_log`, never crash the app.
-  Fallback: request an official bulk export from Training Hub and unzip it into
-  `data/fit/` — nothing else changes.
-- **Parser**: `fitdecode` reads each FIT file into `runs` (summary + derived effort
-  bucket and time-of-day) and `track_points` (per-point time offset, lat/lon,
-  elevation, HR, pace). Idempotent: files already ingested are skipped, so re-drops
-  and bulk zips are safe.
-- **API**: `POST /api/sync` (fetch then ingest), `GET /api/sync/status` (last sync
-  time, result, new-run count). Sync also runs on backend startup.
-- **Tests**: parser against a real FIT fixture; effort-bucket unit tests at boundary
-  heart rates (133 / 152 / 171 bpm).
+### Phase 3 — Runs API + filters ✅
 
-### Phase 3 — Runs API + filters
+- **Store** (`store.py`): every SQL statement behind one interface; `:memory:`
+  adapter in tests. **Effort is computed at read time** from avg HR and the current
+  max-HR setting — adjusting max HR re-buckets all history.
+- **RunFilter** (`filters.py`): the one place the shared filter params (Period
+  presets `7d/30d/90d/ytd/year-YYYY/all` + custom dates, Day, Effort, Distance,
+  Time-of-day, Sport — comma multi-select) become a WHERE clause.
+- **Endpoints**: `GET /api/runs`, `/api/runs/{id}/track`, `/api/tracks`, `/api/meta`.
 
-Filter param parsing shared by every map/chart endpoint: Period (presets + custom
-range), Day of week, Effort, min/max Distance, Time-of-day, Sport type. Endpoints for
-run summaries and filtered tracks.
+### Phase 4 — Map views ✅
 
-### Phase 4 — Map views
+Three deck.gl modes over the MapLibre dark basemap, all fed by one shared tracks
+fetch (`useFilters`):
 
-Filter panel wired to the API, plus three deck.gl layer modes: route heatmap (additive
-overlay), gradient trails colored by HR or pace, and the aligned-start timelapse —
-every run's t=0 aligned so trails branch outward simultaneously (TripsLayer, with the
-time-normalization pluggable so chronological mode can drop in later).
+- **Heatmap** — alpha-stacked cyan paths; repetition builds brightness.
+- **Trails** — segments colored by HR or pace (sequential single-hue ramps,
+  brighter = harder/faster).
+- **Timelapse** — aligned-start playback: every run's t=0 together, trails branch
+  outward and accumulate; play/pause/scrub, 10–600× speed. Time mapping is
+  pluggable for the future chronological mode.
 
-### Phase 5 — Dashboard
+`/api/tracks` enforces a `max_points` budget; decimation (every-Nth, endpoints
+kept) is store implementation. Filter panel + Sync button with last-sync status.
 
-Weekly mileage bars + cumulative line; pace trend with rolling mean; goal card —
-user-adjustable annual miles with on-track projection (current rate vs required rate,
-projected year-end total). Settings UI for goal and max HR.
+### Phase 5 — Dashboard ✅
 
-### Phase 6 — Art export
+- **Backend**: `GET /api/dashboard` — one payload from `store.dashboard(filter)`
+  (weekly mileage buckets, pace trend with rolling mean, Goal projection from pure
+  `goal.py`); `GET/PUT /api/settings` (annual goal miles, max HR — edits re-bucket
+  Effort instantly). Weekly + pace respect the active filters; **Goal status always
+  covers the whole calendar year**.
+- **Frontend** (Dashboard tab): goal stat card with progress meter and
+  where-you-should-be-today marker; weekly mileage bars, cumulative line, and pace
+  trend (dots + 5-run rolling mean, faster-is-up axis) as hand-rolled SVG with hover
+  tooltips and a collapsible data table; settings panel. Chart palette validated
+  with the dataviz six-checks script against the dark surface.
+- The Timelapse clock moved into `usePlayback` — Phase 6's frame-by-frame MP4
+  renderer becomes its second caller.
 
-Privacy zones (radius around saved locations, trimmed on exports only) and MP4 render
-of the timelapse for shareable art.
+### Phase 6 — Art export ✅
+
+- **Privacy Zones**: pure `privacy.apply_privacy_zones(tracks, zones)` — the safety
+  rule is tested with points and circles, never by watching video. Zones (lat, lon,
+  radius) are edited in settings; `GET /api/tracks?privacy=1` returns trimmed
+  tracks, the local map is never trimmed.
+- **Recording**: in Timelapse mode, ⏺ Record plays one full aligned-start loop and
+  captures exactly what the map shows (composited basemap + trails via
+  MediaRecorder) — the recorder is `usePlayback`'s second consumer, and the speed
+  slider doubles as video-length control. An "apply privacy zones" toggle previews
+  and records the trimmed tracks.
+- **MP4**: the browser's WebM is transcoded by `POST /api/export/mp4` (ffmpeg in
+  the backend image, h264 + faststart); if transcoding ever fails the WebM
+  downloads instead, so an export always lands.
+
+All six v1 phases are complete. Next up is the post-v1 backlog below.
 
 ## Data & privacy
 

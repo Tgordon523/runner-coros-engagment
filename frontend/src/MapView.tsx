@@ -28,6 +28,8 @@ export default function MapView({ tracks, mode, metric, currentTime }: Props) {
       style: DARK_STYLE,
       center: [-98.5, 39.8],
       zoom: 3,
+      // recorder reads pixels off this canvas
+      preserveDrawingBuffer: true,
     });
     const overlay = new MapboxOverlay({ layers: [] });
     map.addControl(overlay as unknown as maplibregl.IControl);

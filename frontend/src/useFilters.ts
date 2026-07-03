@@ -36,8 +36,9 @@ export function toQuery(f: Filters): string {
   return q.toString();
 }
 
-/** One fetch per filter change; every map layer consumes the same result. */
-export function useTracks(filters: Filters): {
+/** One fetch per filter change; every map layer consumes the same result.
+ * `privacy` asks the backend to trim Privacy Zones (export preview). */
+export function useTracks(filters: Filters, privacy = false): {
   tracks: Track[];
   loading: boolean;
   error: string | null;
@@ -45,7 +46,8 @@ export function useTracks(filters: Filters): {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const query = toQuery(filters);
+  let query = toQuery(filters);
+  if (privacy) query = query ? `${query}&privacy=1` : "privacy=1";
 
   useEffect(() => {
     let cancelled = false;
