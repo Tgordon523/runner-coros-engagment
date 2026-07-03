@@ -17,7 +17,21 @@ make up
 - Frontend: http://localhost:5173
 - API: http://localhost:8000/api/health
 
-## Phase 1 — Skeleton (done)
+## Roadmap
+
+| Phase | Status | Delivers |
+|-------|--------|----------|
+| 1 — Skeleton | ✅ done | Docker compose, FastAPI + SQLite schema, React/MapLibre map shell |
+| 2 — Ingestion | 🔜 next | COROS fetcher, FIT parser, `POST /api/sync` |
+| 3 — Runs API + filters | planned | Period / Day / Effort / Distance / Time-of-day / Sport filtering |
+| 4 — Map views | planned | Heatmap, HR/pace gradient trails, aligned-start timelapse |
+| 5 — Dashboard | planned | Weekly mileage + cumulative, pace trend, adjustable annual goal with on-track projection |
+| 6 — Art export | planned | Privacy-zone trim, MP4 render of timelapse |
+
+Post-v1 backlog: chronological timelapse mode, effort distribution chart, poster grid,
+elevation gradient trails, calendar feature, race-training goals.
+
+### Phase 1 — Skeleton (done)
 
 Runnable end-to-end shell.
 
@@ -37,7 +51,7 @@ Runnable end-to-end shell.
 macOS note (OrbStack/Docker Desktop): the app must have Files-and-Folders permission
 for the folder holding this repo, or bind mounts fail with "Operation not permitted".
 
-## Phase 2 — Ingestion (next)
+### Phase 2 — Ingestion (next)
 
 Turns FIT files into queryable runs.
 
@@ -54,6 +68,30 @@ Turns FIT files into queryable runs.
   time, result, new-run count). Sync also runs on backend startup.
 - **Tests**: parser against a real FIT fixture; effort-bucket unit tests at boundary
   heart rates (133 / 152 / 171 bpm).
+
+### Phase 3 — Runs API + filters
+
+Filter param parsing shared by every map/chart endpoint: Period (presets + custom
+range), Day of week, Effort, min/max Distance, Time-of-day, Sport type. Endpoints for
+run summaries and filtered tracks.
+
+### Phase 4 — Map views
+
+Filter panel wired to the API, plus three deck.gl layer modes: route heatmap (additive
+overlay), gradient trails colored by HR or pace, and the aligned-start timelapse —
+every run's t=0 aligned so trails branch outward simultaneously (TripsLayer, with the
+time-normalization pluggable so chronological mode can drop in later).
+
+### Phase 5 — Dashboard
+
+Weekly mileage bars + cumulative line; pace trend with rolling mean; goal card —
+user-adjustable annual miles with on-track projection (current rate vs required rate,
+projected year-end total). Settings UI for goal and max HR.
+
+### Phase 6 — Art export
+
+Privacy zones (radius around saved locations, trimmed on exports only) and MP4 render
+of the timelapse for shareable art.
 
 ## Data & privacy
 
