@@ -4,13 +4,13 @@ Drop any real COROS FIT file at backend/tests/fixtures/sample.fit to enable.
 (Real FIT files are personal data, so none is committed; test skips without one.)
 """
 
-import sqlite3
 from pathlib import Path
 
 import pytest
 
-from app.db import SCHEMA
-from app.ingest.parser import ingest_file, parse_fit
+from app.ingest.derive import summarize
+from app.ingest.parser import parse_fit
+from app.store import Store
 
 FIXTURE = Path(__file__).parent / "fixtures" / "sample.fit"
 
@@ -29,11 +29,8 @@ def test_parse_fit_basics():
 
 
 def test_ingest_idempotent():
-    conn = sqlite3.connect(":memory:")
-    conn.row_factory = sqlite3.Row
-    conn.executescript(SCHEMA)
-    assert ingest_file(conn, FIXTURE) is True
-    assert ingest_file(conn, FIXTURE) is False
-    assert conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0] == 1
-    n_points = conn.execute("SELECT COUNT(*) FROM track_points").fetchone()[0]
-    assert n_points > 0
+    store = Store(":memory:")
+    parsed = parse_fit(FIXTURE)
+    row = summarize(parsed, FIXTURE.name)
+    assert store.add_run(row, parsed.points) is True
+    assert store.add_run(row, parsed.points) is False

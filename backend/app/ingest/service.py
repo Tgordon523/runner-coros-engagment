@@ -2,22 +2,35 @@
 
 import logging
 import threading
-from datetime import datetime, timezone
+from pathlib import Path
 
 from ..config import FIT_DIR
-from ..db import connect
-from . import fetcher, parser
+from ..store import Store
+from . import fetcher
+from .derive import summarize
+from .parser import parse_fit
 
 logger = logging.getLogger(__name__)
 
 _sync_lock = threading.Lock()
 
 
-def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+def ingest_folder(store: Store, fit_dir: Path) -> int:
+    """Ingest every not-yet-seen FIT file in the folder. Returns new-run count."""
+    new = 0
+    for path in sorted(fit_dir.glob("*.[fF][iI][tT]")):
+        if store.has_run(path.name):
+            continue
+        try:
+            parsed = parse_fit(path)
+            if parsed and store.add_run(summarize(parsed, path.name), parsed.points):
+                new += 1
+        except Exception:
+            logger.exception("failed to ingest %s", path.name)
+    return new
 
 
-def run_sync() -> dict:
+def run_sync(store: Store) -> dict:
     """Fetch new FIT files (if credentials set), ingest the folder, log the result.
 
     The fetcher hits an unofficial API and is allowed to fail: ingest still runs
@@ -26,13 +39,7 @@ def run_sync() -> dict:
     if not _sync_lock.acquire(blocking=False):
         return {"status": "already-running"}
     try:
-        conn = connect()
-        cur = conn.execute(
-            "INSERT INTO sync_log (started_at, status) VALUES (?, 'running')",
-            (_now(),),
-        )
-        sync_id = cur.lastrowid
-        conn.commit()
+        sync_id = store.sync_started()
 
         error = None
         if fetcher.credentials_configured():
@@ -45,25 +52,10 @@ def run_sync() -> dict:
         else:
             error = "fetch skipped: COROS credentials not configured"
 
-        new_runs = parser.ingest_folder(conn, FIT_DIR)
+        new_runs = ingest_folder(store, FIT_DIR)
 
         status = "error" if error and new_runs == 0 else "ok"
-        conn.execute(
-            """UPDATE sync_log SET finished_at = ?, status = ?, new_runs = ?,
-               error = ? WHERE id = ?""",
-            (_now(), status, new_runs, error, sync_id),
-        )
-        conn.commit()
-        conn.close()
+        store.sync_finished(sync_id, status, new_runs, error)
         return {"status": status, "new_runs": new_runs, "error": error}
     finally:
         _sync_lock.release()
-
-
-def last_sync() -> dict | None:
-    conn = connect()
-    row = conn.execute(
-        "SELECT * FROM sync_log ORDER BY id DESC LIMIT 1"
-    ).fetchone()
-    conn.close()
-    return dict(row) if row else None

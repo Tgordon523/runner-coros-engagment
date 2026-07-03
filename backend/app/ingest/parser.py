@@ -1,16 +1,14 @@
-"""FIT file -> runs + track_points rows. Idempotent by fit_filename."""
+"""FIT decoding only: file -> ParsedRun. Derivation lives in derive.summarize,
+persistence in the store."""
 
 import logging
-import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 import fitdecode
 
-from ..config import LOCAL_TZ, MAX_HR
-from .derive import effort_bucket, pace_s_per_mi, semicircles_to_degrees, time_of_day
+from .derive import pace_s_per_mi, semicircles_to_degrees
 
 logger = logging.getLogger(__name__)
 
@@ -115,64 +113,3 @@ def parse_fit(path: Path) -> ParsedRun | None:
         avg_hr=avg_hr,
         points=points,
     )
-
-
-def ingest_file(conn: sqlite3.Connection, path: Path) -> bool:
-    """Insert one FIT file into the DB. Returns True if a new run was added."""
-    exists = conn.execute(
-        "SELECT 1 FROM runs WHERE fit_filename = ?", (path.name,)
-    ).fetchone()
-    if exists:
-        return False
-
-    run = parse_fit(path)
-    if run is None:
-        return False
-
-    local = run.started_at.astimezone(ZoneInfo(LOCAL_TZ))
-    avg_pace = run.duration_s / run.distance_mi if run.distance_mi > 0 else None
-
-    cur = conn.execute(
-        """INSERT INTO runs (fit_filename, started_at, local_date, day_of_week,
-               time_of_day, sport, distance_mi, duration_s, avg_pace_s_per_mi,
-               avg_hr, effort)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            path.name,
-            run.started_at.isoformat(),
-            local.date().isoformat(),
-            local.weekday(),
-            time_of_day(local.hour),
-            run.sport,
-            run.distance_mi,
-            run.duration_s,
-            avg_pace,
-            run.avg_hr,
-            effort_bucket(run.avg_hr, MAX_HR),
-        ),
-    )
-    run_id = cur.lastrowid
-    conn.executemany(
-        """INSERT INTO track_points (run_id, seq, t_offset_s, lat, lon, ele_m, hr,
-               pace_s_per_mi)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        [
-            (run_id, i, p.t_offset_s, p.lat, p.lon, p.ele_m, p.hr, p.pace_s_per_mi)
-            for i, p in enumerate(run.points)
-        ],
-    )
-    return True
-
-
-def ingest_folder(conn: sqlite3.Connection, fit_dir: Path) -> int:
-    """Ingest every not-yet-seen FIT file in the folder. Returns new-run count."""
-    new = 0
-    for path in sorted(fit_dir.glob("*.[fF][iI][tT]")):
-        try:
-            if ingest_file(conn, path):
-                new += 1
-                conn.commit()
-        except Exception:
-            logger.exception("failed to ingest %s", path.name)
-            conn.rollback()
-    return new
