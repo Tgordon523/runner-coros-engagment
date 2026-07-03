@@ -98,6 +98,23 @@ def test_run_track_and_missing(store):
     assert store.run_track(9999) is None
 
 
+def test_dashboard_split_filtering(store):
+    from app.filters import RunFilter
+
+    store.add_run(make_run("a.fit", avg_hr=HR["easy"], local_date="2026-03-02", distance_mi=10), [])
+    store.add_run(make_run("b.fit", avg_hr=HR["hard"], local_date="2026-03-03", distance_mi=6), [])
+    store.set_setting("annual_goal_mi", "1000")
+
+    d = store.dashboard(RunFilter(efforts=["hard"]), today=date(2026, 7, 2))
+    # weekly + pace respect the filter…
+    assert sum(w["miles"] for w in d["weekly"]) == 6
+    assert len(d["pace_trend"]) == 1
+    # …Goal never does
+    assert d["goal"]["ytd_mi"] == 16
+    assert d["goal"]["target_mi"] == 1000
+    assert d["goal"]["on_track"] is False
+
+
 def test_sync_log_roundtrip(store):
     sync_id = store.sync_started()
     assert store.last_sync()["status"] == "running"

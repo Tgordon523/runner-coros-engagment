@@ -21,7 +21,7 @@ A day-of-week facet of a run (e.g., Sunday), distinct from Period.
 _Avoid_: Date
 
 **Goal**:
-A user-adjustable number of miles to achieve in the calendar year, against which on-track status is projected.
+A user-adjustable number of miles to achieve in the calendar year, against which on-track status is projected. Goal status always covers all runs in the year, regardless of active filters.
 _Avoid_: Plan, target pace
 
 **Privacy Zone**:

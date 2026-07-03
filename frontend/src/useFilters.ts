@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet } from "./api";
-import type { Meta, Track } from "./types";
+import type { Dashboard, Meta, Track } from "./types";
 
 export interface Filters {
   period: string; // all | 7d | 30d | 90d | ytd | year-YYYY
@@ -65,6 +65,23 @@ export function useTracks(filters: Filters): {
   }, [query]);
 
   return { tracks, loading, error };
+}
+
+/** One dashboard fetch per filter change; every chart consumes the same
+ * payload (weekly + pace respect filters, goal never does — see CONTEXT.md). */
+export function useDashboard(filters: Filters, refreshKey = 0): Dashboard | null {
+  const [data, setData] = useState<Dashboard | null>(null);
+  const query = toQuery(filters);
+  useEffect(() => {
+    let cancelled = false;
+    apiGet<Dashboard>(`/api/dashboard${query ? `?${query}` : ""}`)
+      .then((d) => !cancelled && setData(d))
+      .catch(() => !cancelled && setData(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [query, refreshKey]);
+  return data;
 }
 
 export function useMeta(refreshKey = 0): Meta | null {

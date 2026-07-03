@@ -5,11 +5,14 @@ Adapters: file DB in prod, ":memory:" in tests.
 
 import sqlite3
 import threading
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from zoneinfo import ZoneInfo
 
-from .config import EFFORT_BUCKETS, MAX_HR
+from .config import EFFORT_BUCKETS, LOCAL_TZ, MAX_HR
+from .dashboard import pace_trend, weekly_mileage
 from .db import SCHEMA
 from .filters import RunFilter
+from .goal import goal_status
 from .ingest.derive import RunRow
 from .ingest.parser import TrackPoint
 
@@ -56,6 +59,13 @@ class Store:
                 "SELECT value FROM settings WHERE key = 'max_hr'"
             ).fetchone()
         return int(row["value"]) if row else MAX_HR
+
+    def annual_goal_mi(self) -> float:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM settings WHERE key = 'annual_goal_mi'"
+            ).fetchone()
+        return float(row["value"]) if row else 0.0
 
     def set_setting(self, key: str, value: str) -> None:
         with self._lock, self._conn:
@@ -180,6 +190,26 @@ class Store:
                     }
                 )
         return out
+
+    def dashboard(self, f: RunFilter, today: date | None = None) -> dict:
+        """Everything the Dashboard renders, in one payload.
+
+        Weekly mileage and pace trend respect the filter; Goal status is
+        always the unfiltered current calendar year (see CONTEXT.md).
+        """
+        today = today or datetime.now(ZoneInfo(LOCAL_TZ)).date()
+        rows = self.runs(f)
+        with self._lock:
+            ytd = self._conn.execute(
+                "SELECT COALESCE(SUM(distance_mi), 0) FROM runs "
+                "WHERE local_date >= ?",
+                (date(today.year, 1, 1).isoformat(),),
+            ).fetchone()[0]
+        return {
+            "weekly": weekly_mileage(rows),
+            "pace_trend": pace_trend(rows),
+            "goal": goal_status(self.annual_goal_mi(), ytd, today),
+        }
 
     def meta(self) -> dict:
         """What the filter panel needs to render its options."""

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api import runs
+from app.api import dashboard, runs, settings
 from app.store import Store
 from conftest import HR, make_run
 
@@ -9,8 +9,33 @@ from conftest import HR, make_run
 def make_client() -> tuple[TestClient, Store]:
     app = FastAPI()
     app.include_router(runs.router)
+    app.include_router(dashboard.router)
+    app.include_router(settings.router)
     app.state.store = Store(":memory:")
     return TestClient(app), app.state.store
+
+
+def test_settings_roundtrip_rebuckets_effort():
+    client, store = make_client()
+    store.add_run(make_run("a.fit", avg_hr=150), [])  # 150/190 -> moderate
+
+    assert client.get("/api/settings").json() == {
+        "annual_goal_mi": 0.0, "max_hr": 190,
+    }
+    r = client.put("/api/settings", json={"annual_goal_mi": 1000, "max_hr": 180})
+    assert r.json() == {"annual_goal_mi": 1000.0, "max_hr": 180}
+    # max HR change re-buckets through the API too
+    assert client.get("/api/runs").json()[0]["effort"] == "hard"
+    assert client.put("/api/settings", json={"max_hr": 999}).status_code == 422
+
+
+def test_dashboard_endpoint():
+    client, store = make_client()
+    store.add_run(make_run("a.fit", distance_mi=10), [])
+    d = client.get("/api/dashboard").json()
+    assert set(d) == {"weekly", "pace_trend", "goal"}
+    assert d["weekly"][0]["miles"] == 10
+    assert d["goal"]["target_mi"] == 0
 
 
 def test_runs_endpoint_filters():

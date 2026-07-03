@@ -3,7 +3,7 @@ import threading
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import runs, sync
+from .api import dashboard, runs, settings, sync
 from .config import DB_PATH, FIT_DIR
 from .ingest import service
 from .store import Store
@@ -19,6 +19,8 @@ app.add_middleware(
 
 app.include_router(sync.router)
 app.include_router(runs.router)
+app.include_router(dashboard.router)
+app.include_router(settings.router)
 
 
 @app.on_event("startup")
