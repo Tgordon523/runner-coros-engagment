@@ -1,0 +1,25 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .config import FIT_DIR
+from .db import init_db
+
+app = FastAPI(title="Run Tracker")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.on_event("startup")
+def startup() -> None:
+    FIT_DIR.mkdir(parents=True, exist_ok=True)
+    init_db()
+
+
+@app.get("/api/health")
+def health() -> dict:
+    return {"status": "ok"}
