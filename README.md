@@ -18,6 +18,7 @@ make up
 - API: http://localhost:8000/api/health
 
 Backend tests: `docker compose exec backend sh -c "cd /app && python -m pytest tests"`
+Frontend tests: `docker compose exec frontend sh -c "cd /app && npm test"`
 
 ## Roadmap
 

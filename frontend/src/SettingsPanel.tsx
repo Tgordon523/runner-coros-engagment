@@ -8,7 +8,7 @@ interface Props {
   onSaved: () => void;
 }
 
-function parseZones(text: string) {
+export function parseZones(text: string) {
   return text
     .split("\n")
     .map((l) => l.trim())
