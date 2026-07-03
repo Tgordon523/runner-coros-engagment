@@ -1,0 +1,39 @@
+# Secrets — COROS credentials
+.env
+.env.*
+!.env.example
+
+# Personal run data (GPS tracks reveal home/work locations)
+data/
+exports/
+*.fit
+*.FIT
+*.tcx
+*.gpx
+*.kml
+*.db
+*.db-journal
+*.sqlite*
+
+# Rendered art may contain location data
+*.mp4
+*.webm
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Node / frontend
+node_modules/
+dist/
+*.local
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Claude Code local settings
+.claude/settings.local.json
