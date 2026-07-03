@@ -56,7 +56,14 @@ export interface Dashboard {
   goal: GoalStatus;
 }
 
+export interface PrivacyZone {
+  lat: number;
+  lon: number;
+  radius_m: number;
+}
+
 export interface Settings {
   annual_goal_mi: number;
   max_hr: number;
+  privacy_zones: PrivacyZone[];
 }

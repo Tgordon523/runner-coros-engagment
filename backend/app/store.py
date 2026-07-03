@@ -60,6 +60,15 @@ class Store:
             ).fetchone()
         return int(row["value"]) if row else MAX_HR
 
+    def privacy_zones(self) -> list[dict]:
+        import json
+
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM settings WHERE key = 'privacy_zones'"
+            ).fetchone()
+        return json.loads(row["value"]) if row else []
+
     def annual_goal_mi(self) -> float:
         with self._lock:
             row = self._conn.execute(

@@ -28,7 +28,7 @@ Backend tests: `docker compose exec backend sh -c "cd /app && python -m pytest t
 | 3 — Runs API + filters | ✅ done | Period / Day / Effort / Distance / Time-of-day / Sport filtering behind Store + RunFilter |
 | 4 — Map views | ✅ done | Heatmap, HR/pace gradient trails, aligned-start timelapse |
 | 5 — Dashboard | ✅ done | Weekly/cumulative/pace charts, goal card, settings UI over `/api/dashboard` + `/api/settings` |
-| 6 — Art export | planned | Privacy-zone trim, MP4 render of timelapse |
+| 6 — Art export | ✅ done | Privacy-zone trim, timelapse recording, MP4 download |
 
 Post-v1 backlog: chronological timelapse mode, effort distribution chart, poster grid,
 elevation gradient trails, calendar feature, race-training goals.
@@ -93,11 +93,22 @@ kept) is store implementation. Filter panel + Sync button with last-sync status.
 - The Timelapse clock moved into `usePlayback` — Phase 6's frame-by-frame MP4
   renderer becomes its second caller.
 
-### Phase 6 — Art export (planned)
+### Phase 6 — Art export ✅
 
-Privacy Zones (radius around saved locations, trimmed on exports only) and MP4
-render of the timelapse. Privacy trim will be a pure `tracks -> tracks` function so
-the safety rule is testable without rendering video.
+- **Privacy Zones**: pure `privacy.apply_privacy_zones(tracks, zones)` — the safety
+  rule is tested with points and circles, never by watching video. Zones (lat, lon,
+  radius) are edited in settings; `GET /api/tracks?privacy=1` returns trimmed
+  tracks, the local map is never trimmed.
+- **Recording**: in Timelapse mode, ⏺ Record plays one full aligned-start loop and
+  captures exactly what the map shows (composited basemap + trails via
+  MediaRecorder) — the recorder is `usePlayback`'s second consumer, and the speed
+  slider doubles as video-length control. An "apply privacy zones" toggle previews
+  and records the trimmed tracks.
+- **MP4**: the browser's WebM is transcoded by `POST /api/export/mp4` (ffmpeg in
+  the backend image, h264 + faststart); if transcoding ever fails the WebM
+  downloads instead, so an export always lands.
+
+All six v1 phases are complete. Next up is the post-v1 backlog below.
 
 ## Data & privacy
 

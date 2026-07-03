@@ -20,13 +20,35 @@ def test_settings_roundtrip_rebuckets_effort():
     store.add_run(make_run("a.fit", avg_hr=150), [])  # 150/190 -> moderate
 
     assert client.get("/api/settings").json() == {
-        "annual_goal_mi": 0.0, "max_hr": 190,
+        "annual_goal_mi": 0.0, "max_hr": 190, "privacy_zones": [],
     }
     r = client.put("/api/settings", json={"annual_goal_mi": 1000, "max_hr": 180})
-    assert r.json() == {"annual_goal_mi": 1000.0, "max_hr": 180}
+    assert r.json() == {"annual_goal_mi": 1000.0, "max_hr": 180, "privacy_zones": []}
     # max HR change re-buckets through the API too
     assert client.get("/api/runs").json()[0]["effort"] == "hard"
     assert client.put("/api/settings", json={"max_hr": 999}).status_code == 422
+
+
+def test_tracks_privacy_flag():
+    client, store = make_client()
+    from app.ingest.parser import TrackPoint
+
+    pts = [
+        TrackPoint(0.0, 41.88, -87.63, None, 140, 480.0),   # inside zone
+        TrackPoint(60.0, 41.90, -87.63, None, 140, 480.0),  # ~2km away
+    ]
+    store.add_run(make_run("a.fit"), pts)
+    client.put("/api/settings", json={
+        "privacy_zones": [{"lat": 41.88, "lon": -87.63, "radius_m": 200}],
+    })
+
+    assert len(client.get("/api/tracks").json()[0]["points"]) == 2  # local view full
+    trimmed = client.get("/api/tracks?privacy=1").json()
+    assert len(trimmed[0]["points"]) == 1
+    assert client.get("/api/settings").json()["privacy_zones"][0]["radius_m"] == 200
+    # bad zone rejected
+    r = client.put("/api/settings", json={"privacy_zones": [{"lat": 99, "lon": 0, "radius_m": 100}]})
+    assert r.status_code == 422
 
 
 def test_dashboard_endpoint():
