@@ -137,9 +137,13 @@ class Store:
             ).fetchall()
         return [dict(r) for r in rows]
 
-    def tracks(self, f: RunFilter) -> list[dict]:
+    def tracks(self, f: RunFilter, max_points: int = 150_000) -> list[dict]:
         """Filtered tracks for map layers: one entry per run, points as
-        [lon, lat, t_offset_s, hr, pace_s_per_mi] tuples (deck.gl-friendly)."""
+        [lon, lat, t_offset_s, hr, pace_s_per_mi] tuples (deck.gl-friendly).
+
+        The interface promises at most ~max_points total; decimation strategy
+        (currently every-Nth per run, endpoints kept) is implementation.
+        """
         where, params = f.where()
         effort_params = self._effort_params()
         with self._lock:
@@ -148,12 +152,23 @@ class Store:
                 f"FROM ({RUNS_WITH_EFFORT}) WHERE {where} ORDER BY started_at",
                 effort_params + params,
             ).fetchall()
+            if not runs:
+                return []
+            ids = [r["id"] for r in runs]
+            marks = ",".join("?" * len(ids))
+            total = self._conn.execute(
+                f"SELECT COUNT(*) FROM track_points WHERE run_id IN ({marks})", ids
+            ).fetchone()[0]
+            stride = max(1, -(-total // max_points))
             out = []
             for r in runs:
                 pts = self._conn.execute(
                     """SELECT lon, lat, t_offset_s, hr, pace_s_per_mi
-                       FROM track_points WHERE run_id = ? ORDER BY seq""",
-                    (r["id"],),
+                       FROM track_points
+                       WHERE run_id = ? AND (seq % ? = 0 OR seq =
+                           (SELECT MAX(seq) FROM track_points WHERE run_id = ?))
+                       ORDER BY seq""",
+                    (r["id"], stride, r["id"]),
                 ).fetchall()
                 out.append(
                     {
@@ -165,6 +180,26 @@ class Store:
                     }
                 )
         return out
+
+    def meta(self) -> dict:
+        """What the filter panel needs to render its options."""
+        with self._lock:
+            sports = [
+                r["sport"]
+                for r in self._conn.execute(
+                    "SELECT DISTINCT sport FROM runs ORDER BY sport"
+                ).fetchall()
+            ]
+            row = self._conn.execute(
+                "SELECT MIN(local_date) AS first, MAX(local_date) AS last, "
+                "COUNT(*) AS count FROM runs"
+            ).fetchone()
+        return {
+            "sports": sports,
+            "first_date": row["first"],
+            "last_date": row["last"],
+            "run_count": row["count"],
+        }
 
     # -- sync log -----------------------------------------------------------
 

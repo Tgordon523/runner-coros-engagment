@@ -1,10 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..deps import get_store
 from ..filters import RunFilter, run_filter
 from ..store import Store
 
 router = APIRouter(prefix="/api", tags=["runs"])
+
+
+@router.get("/meta")
+def meta(store: Store = Depends(get_store)) -> dict:
+    return store.meta()
 
 
 @router.get("/runs")
@@ -24,6 +31,8 @@ def run_track(run_id: int, store: Store = Depends(get_store)) -> list[dict]:
 
 @router.get("/tracks")
 def tracks(
-    f: RunFilter = Depends(run_filter), store: Store = Depends(get_store)
+    f: RunFilter = Depends(run_filter),
+    max_points: Annotated[int, Query(ge=1_000, le=2_000_000)] = 150_000,
+    store: Store = Depends(get_store),
 ) -> list[dict]:
-    return store.tracks(f)
+    return store.tracks(f, max_points)

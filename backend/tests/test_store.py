@@ -65,6 +65,32 @@ def test_tracks_shape(store):
     assert (lon, lat) == (-87.6, 41.9)
 
 
+def test_tracks_decimation_budget(store):
+    store.add_run(make_run("a.fit"), [_pt(i) for i in range(100)])
+    store.add_run(make_run("b.fit", local_date="2026-06-16"), [_pt(i) for i in range(100)])
+
+    full = store.tracks(RunFilter())
+    assert sum(len(t["points"]) for t in full) == 200
+
+    budget = store.tracks(RunFilter(), max_points=20)
+    for t in budget:
+        assert len(t["points"]) <= 12  # stride 10 -> 10 points + kept endpoint
+        assert t["points"][-1][2] == 99.0  # last point survives decimation
+
+
+def test_meta(store):
+    assert store.meta() == {
+        "sports": [], "first_date": None, "last_date": None, "run_count": 0,
+    }
+    store.add_run(make_run("a.fit", sport="running", local_date="2026-01-05"), [])
+    store.add_run(make_run("b.fit", sport="running/trail", local_date="2026-06-15"), [])
+    m = store.meta()
+    assert m["sports"] == ["running", "running/trail"]
+    assert m["first_date"] == "2026-01-05"
+    assert m["last_date"] == "2026-06-15"
+    assert m["run_count"] == 2
+
+
 def test_run_track_and_missing(store):
     store.add_run(make_run("a.fit"), [_pt(0)])
     run_id = store.runs(RunFilter())[0]["id"]
