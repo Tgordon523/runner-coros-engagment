@@ -27,7 +27,7 @@ Backend tests: `docker compose exec backend sh -c "cd /app && python -m pytest t
 | 2 — Ingestion | ✅ done | COROS fetcher, FIT parser, `POST /api/sync` |
 | 3 — Runs API + filters | ✅ done | Period / Day / Effort / Distance / Time-of-day / Sport filtering behind Store + RunFilter |
 | 4 — Map views | ✅ done | Heatmap, HR/pace gradient trails, aligned-start timelapse |
-| 5 — Dashboard | 🔜 in progress | Charts + goal card + settings UI (backend `/api/dashboard` + `/api/settings` already shipped) |
+| 5 — Dashboard | ✅ done | Weekly/cumulative/pace charts, goal card, settings UI over `/api/dashboard` + `/api/settings` |
 | 6 — Art export | planned | Privacy-zone trim, MP4 render of timelapse |
 
 Post-v1 backlog: chronological timelapse mode, effort distribution chart, poster grid,
@@ -78,15 +78,20 @@ fetch (`useFilters`):
 `/api/tracks` enforces a `max_points` budget; decimation (every-Nth, endpoints
 kept) is store implementation. Filter panel + Sync button with last-sync status.
 
-### Phase 5 — Dashboard (in progress)
+### Phase 5 — Dashboard ✅
 
-Backend shipped: `GET /api/dashboard` — one payload from `store.dashboard(filter)`
-(weekly mileage buckets, pace trend with rolling mean, Goal projection from pure
-`goal.py`); `GET/PUT /api/settings` (annual goal miles, max HR). Weekly + pace
-respect the active filters; **Goal status always covers the whole calendar year**.
-
-Remaining: chart components (weekly bars, cumulative vs required-pace, pace trend),
-goal card, settings UI.
+- **Backend**: `GET /api/dashboard` — one payload from `store.dashboard(filter)`
+  (weekly mileage buckets, pace trend with rolling mean, Goal projection from pure
+  `goal.py`); `GET/PUT /api/settings` (annual goal miles, max HR — edits re-bucket
+  Effort instantly). Weekly + pace respect the active filters; **Goal status always
+  covers the whole calendar year**.
+- **Frontend** (Dashboard tab): goal stat card with progress meter and
+  where-you-should-be-today marker; weekly mileage bars, cumulative line, and pace
+  trend (dots + 5-run rolling mean, faster-is-up axis) as hand-rolled SVG with hover
+  tooltips and a collapsible data table; settings panel. Chart palette validated
+  with the dataviz six-checks script against the dark surface.
+- The Timelapse clock moved into `usePlayback` — Phase 6's frame-by-frame MP4
+  renderer becomes its second caller.
 
 ### Phase 6 — Art export (planned)
 
