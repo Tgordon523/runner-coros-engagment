@@ -5,7 +5,65 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Run Tracker</title>
     <style>
+      * { box-sizing: border-box; }
       html, body, #root { margin: 0; height: 100%; }
+      body {
+        font: 14px/1.45 system-ui, -apple-system, sans-serif;
+        background: #0f172a;
+        color: #e2e8f0;
+      }
+      .app { display: flex; height: 100%; }
+      .sidebar {
+        width: 280px;
+        flex: none;
+        padding: 16px;
+        overflow-y: auto;
+        background: #0f172a;
+        border-right: 1px solid #1e293b;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .sidebar h1 { font-size: 17px; margin: 0; }
+      .map { flex: 1; position: relative; }
+
+      .modes { display: flex; gap: 6px; }
+      .mode, .chip, .sync-btn, .playback button {
+        background: #1e293b;
+        color: #cbd5e1;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 5px 10px;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      .mode.on, .chip.on { background: #34d399; border-color: #34d399; color: #052e16; }
+      .mode { flex: 1; }
+
+      .panel, .field { display: flex; flex-direction: column; gap: 6px; }
+      .panel { gap: 14px; }
+      .field > span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #64748b; }
+      .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+      .chip { padding: 3px 8px; }
+
+      select, input[type="number"] {
+        background: #1e293b;
+        color: #e2e8f0;
+        border: 1px solid #334155;
+        border-radius: 6px;
+        padding: 5px 8px;
+        font-size: 13px;
+        width: 100%;
+      }
+      .range { display: flex; align-items: center; gap: 6px; }
+      .playback { display: flex; align-items: center; gap: 8px; }
+      .playback input[type="range"] { flex: 1; accent-color: #34d399; }
+      .dim { color: #64748b; font-size: 12px; white-space: nowrap; }
+
+      .sync { display: flex; flex-direction: column; gap: 4px; }
+      .sync-note { margin: 0; font-size: 11px; color: #64748b; word-break: break-word; }
+      .sync-note.err { color: #f87171; }
+      .status { margin: 0; font-size: 12px; color: #64748b; }
     </style>
   </head>
   <body>

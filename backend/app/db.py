@@ -1,7 +1,3 @@
-import sqlite3
-
-from .config import DB_PATH, DATA_DIR
-
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS runs (
     id INTEGER PRIMARY KEY,
@@ -14,8 +10,9 @@ CREATE TABLE IF NOT EXISTS runs (
     distance_mi REAL NOT NULL,
     duration_s INTEGER NOT NULL,
     avg_pace_s_per_mi REAL,
-    avg_hr INTEGER,
-    effort TEXT                        -- easy|moderate|hard|max, NULL if no HR
+    avg_hr INTEGER
+    -- Effort is never stored: the store computes it at read time from avg_hr
+    -- and the current max-HR setting, so adjusting max HR re-buckets history.
 );
 
 CREATE TABLE IF NOT EXISTS track_points (
@@ -46,16 +43,3 @@ CREATE TABLE IF NOT EXISTS sync_log (
 
 CREATE INDEX IF NOT EXISTS idx_runs_local_date ON runs(local_date);
 """
-
-
-def connect() -> sqlite3.Connection:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
-
-
-def init_db() -> None:
-    with connect() as conn:
-        conn.executescript(SCHEMA)
