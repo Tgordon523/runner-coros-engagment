@@ -1,6 +1,8 @@
+from datetime import date
+
 from app.filters import RunFilter
 from app.ingest.parser import TrackPoint
-from conftest import make_run
+from conftest import HR, make_run
 
 
 def _pt(seq: int) -> TrackPoint:
@@ -17,16 +19,39 @@ def test_add_run_idempotent(store):
 
 
 def test_runs_filtering(store):
-    store.add_run(make_run("a.fit", effort="easy", day_of_week=0, distance_mi=3), [])
-    store.add_run(make_run("b.fit", effort="hard", day_of_week=6, distance_mi=13), [])
-    store.add_run(make_run("c.fit", effort="hard", day_of_week=6, distance_mi=6,
+    store.add_run(make_run("a.fit", avg_hr=HR["easy"], day_of_week=0, distance_mi=3), [])
+    store.add_run(make_run("b.fit", avg_hr=HR["hard"], day_of_week=6, distance_mi=13), [])
+    store.add_run(make_run("c.fit", avg_hr=HR["hard"], day_of_week=6, distance_mi=6,
                            local_date="2025-03-01"), [])
 
     assert len(store.runs(RunFilter(efforts=["hard"]))) == 2
     assert len(store.runs(RunFilter(efforts=["hard"], min_mi=10))) == 1
     assert len(store.runs(RunFilter(days=[6]))) == 2
-    from datetime import date
     assert len(store.runs(RunFilter(start=date(2026, 1, 1)))) == 2
+
+
+def test_effort_boundaries_at_default_max_hr(store):
+    # max HR 190: 70% = 133, 80% = 152, 90% = 171 (lower bound inclusive)
+    for i, (hr, expected) in enumerate(
+        [(132, "easy"), (133, "moderate"), (151, "moderate"), (152, "hard"),
+         (170, "hard"), (171, "max"), (190, "max"), (None, None)]
+    ):
+        store.add_run(make_run(f"{i}.fit", avg_hr=hr), [])
+    by_file = {r["fit_filename"]: r["effort"] for r in store.runs(RunFilter())}
+    assert by_file == {
+        "0.fit": "easy", "1.fit": "moderate", "2.fit": "moderate", "3.fit": "hard",
+        "4.fit": "hard", "5.fit": "max", "6.fit": "max", "7.fit": None,
+    }
+
+
+def test_changing_max_hr_rebuckets_history(store):
+    store.add_run(make_run("a.fit", avg_hr=150), [])
+    assert store.runs(RunFilter())[0]["effort"] == "moderate"  # 150/190 = 79%
+
+    store.set_setting("max_hr", "180")
+    assert store.runs(RunFilter())[0]["effort"] == "hard"  # 150/180 = 83%
+    assert len(store.runs(RunFilter(efforts=["moderate"]))) == 0
+    assert len(store.runs(RunFilter(efforts=["hard"]))) == 1
 
 
 def test_tracks_shape(store):

@@ -9,7 +9,7 @@ A single recorded activity from the watch, parsed from one FIT file.
 _Avoid_: Activity, workout, session
 
 **Effort**:
-A run's intensity bucket (Easy / Moderate / Hard / Max), derived from average heart rate as a percentage of max HR (190).
+A run's intensity bucket (Easy / Moderate / Hard / Max), computed at read time from average heart rate as a percentage of the current max HR setting — never stored, so adjusting max HR re-buckets all history.
 _Avoid_: Intensity, training load, RPE
 
 **Period**:

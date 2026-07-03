@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
-from ..config import EFFORT_BUCKETS, LOCAL_TZ, MAX_HR
+from ..config import LOCAL_TZ
 
 if TYPE_CHECKING:
     from .parser import ParsedRun
@@ -23,7 +23,11 @@ TIME_OF_DAY_BUCKETS = [
 
 @dataclass
 class RunRow:
-    """One row of the runs table (minus id), ready for the store."""
+    """One row of the runs table (minus id), ready for the store.
+
+    Effort is deliberately absent: it is computed by the store at read time
+    from avg_hr and the current max-HR setting (see CONTEXT.md).
+    """
 
     fit_filename: str
     started_at: str  # UTC ISO 8601
@@ -35,7 +39,6 @@ class RunRow:
     duration_s: int
     avg_pace_s_per_mi: float | None
     avg_hr: int | None
-    effort: str | None
 
 
 def summarize(
@@ -43,9 +46,8 @@ def summarize(
     fit_filename: str,
     *,
     local_tz: str = LOCAL_TZ,
-    max_hr: int = MAX_HR,
 ) -> RunRow:
-    """Everything derived about a run happens here, purely."""
+    """Everything derived-at-ingest about a run happens here, purely."""
     local = parsed.started_at.astimezone(ZoneInfo(local_tz))
     return RunRow(
         fit_filename=fit_filename,
@@ -60,18 +62,7 @@ def summarize(
             parsed.duration_s / parsed.distance_mi if parsed.distance_mi > 0 else None
         ),
         avg_hr=parsed.avg_hr,
-        effort=effort_bucket(parsed.avg_hr, max_hr),
     )
-
-
-def effort_bucket(avg_hr: int | None, max_hr: int) -> str | None:
-    if avg_hr is None:
-        return None
-    frac = avg_hr / max_hr
-    for name, lo, hi in EFFORT_BUCKETS:
-        if lo <= frac < hi:
-            return name
-    return None
 
 
 def time_of_day(local_hour: int) -> str:

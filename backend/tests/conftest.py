@@ -4,6 +4,10 @@ from app.ingest.derive import RunRow
 from app.store import Store
 
 
+# avg_hr values that land in each Effort bucket at max HR 190
+HR = {"easy": 120, "moderate": 140, "hard": 160, "max": 175}
+
+
 def make_run(
     fit_filename="a.fit",
     local_date="2026-06-15",
@@ -11,8 +15,7 @@ def make_run(
     time_of_day="morning",
     sport="running",
     distance_mi=5.0,
-    effort="easy",
-    avg_hr=120,
+    avg_hr=HR["easy"],
 ) -> RunRow:
     return RunRow(
         fit_filename=fit_filename,
@@ -25,7 +28,6 @@ def make_run(
         duration_s=int(distance_mi * 480),
         avg_pace_s_per_mi=480.0,
         avg_hr=avg_hr,
-        effort=effort,
     )
 
 

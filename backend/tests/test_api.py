@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.api import runs
 from app.store import Store
-from conftest import make_run
+from conftest import HR, make_run
 
 
 def make_client() -> tuple[TestClient, Store]:
@@ -15,8 +15,8 @@ def make_client() -> tuple[TestClient, Store]:
 
 def test_runs_endpoint_filters():
     client, store = make_client()
-    store.add_run(make_run("a.fit", effort="easy"), [])
-    store.add_run(make_run("b.fit", effort="hard", day_of_week=6), [])
+    store.add_run(make_run("a.fit", avg_hr=HR["easy"]), [])
+    store.add_run(make_run("b.fit", avg_hr=HR["hard"], day_of_week=6), [])
 
     assert len(client.get("/api/runs").json()) == 2
     assert len(client.get("/api/runs?effort=hard").json()) == 1

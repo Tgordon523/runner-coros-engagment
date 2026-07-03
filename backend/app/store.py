@@ -7,19 +7,36 @@ import sqlite3
 import threading
 from datetime import datetime, timezone
 
+from .config import EFFORT_BUCKETS, MAX_HR
 from .db import SCHEMA
 from .filters import RunFilter
 from .ingest.derive import RunRow
 from .ingest.parser import TrackPoint
 
-RUN_COLUMNS = (
-    "id, fit_filename, started_at, local_date, day_of_week, time_of_day, "
-    "sport, distance_mi, duration_s, avg_pace_s_per_mi, avg_hr, effort"
-)
-
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _effort_case() -> tuple[str, int]:
+    """SQL CASE computing the Effort bucket from avg_hr and a bound max HR.
+
+    Generated from EFFORT_BUCKETS so config stays the single source of truth.
+    Returns (sql, number of max-HR parameters to bind).
+    """
+    whens = " ".join(
+        f"WHEN avg_hr < {hi} * ? THEN '{name}'" for name, _, hi in EFFORT_BUCKETS[:-1]
+    )
+    last = EFFORT_BUCKETS[-1][0]
+    sql = f"CASE WHEN avg_hr IS NULL THEN NULL {whens} ELSE '{last}' END"
+    return sql, len(EFFORT_BUCKETS) - 1
+
+
+# Inner select: the runs table plus computed effort. Filters (including the
+# Effort filter) run against this in an outer query, so RunFilter stays
+# ignorant of how effort is derived.
+_CASE_SQL, _CASE_PARAMS = _effort_case()
+RUNS_WITH_EFFORT = f"SELECT *, {_CASE_SQL} AS effort FROM runs"
 
 
 class Store:
@@ -29,6 +46,27 @@ class Store:
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.executescript(SCHEMA)
         self._lock = threading.Lock()
+
+    # -- settings -----------------------------------------------------------
+
+    def max_hr(self) -> int:
+        """Current max HR: the settings row wins, env/config default otherwise."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM settings WHERE key = 'max_hr'"
+            ).fetchone()
+        return int(row["value"]) if row else MAX_HR
+
+    def set_setting(self, key: str, value: str) -> None:
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT INTO settings (key, value) VALUES (?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (key, value),
+            )
+
+    def _effort_params(self) -> list[int]:
+        return [self.max_hr()] * _CASE_PARAMS
 
     # -- runs ---------------------------------------------------------------
 
@@ -47,8 +85,8 @@ class Store:
             cur = self._conn.execute(
                 """INSERT INTO runs (fit_filename, started_at, local_date,
                        day_of_week, time_of_day, sport, distance_mi, duration_s,
-                       avg_pace_s_per_mi, avg_hr, effort)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       avg_pace_s_per_mi, avg_hr)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     run.fit_filename,
                     run.started_at,
@@ -60,7 +98,6 @@ class Store:
                     run.duration_s,
                     run.avg_pace_s_per_mi,
                     run.avg_hr,
-                    run.effort,
                 ),
             )
             run_id = cur.lastrowid
@@ -77,10 +114,12 @@ class Store:
 
     def runs(self, f: RunFilter) -> list[dict]:
         where, params = f.where()
+        effort_params = self._effort_params()
         with self._lock:
             rows = self._conn.execute(
-                f"SELECT {RUN_COLUMNS} FROM runs WHERE {where} ORDER BY started_at DESC",
-                params,
+                f"SELECT * FROM ({RUNS_WITH_EFFORT}) WHERE {where} "
+                "ORDER BY started_at DESC",
+                effort_params + params,
             ).fetchall()
         return [dict(r) for r in rows]
 
@@ -102,11 +141,12 @@ class Store:
         """Filtered tracks for map layers: one entry per run, points as
         [lon, lat, t_offset_s, hr, pace_s_per_mi] tuples (deck.gl-friendly)."""
         where, params = f.where()
+        effort_params = self._effort_params()
         with self._lock:
             runs = self._conn.execute(
-                f"SELECT id, started_at, distance_mi, effort FROM runs "
-                f"WHERE {where} ORDER BY started_at",
-                params,
+                f"SELECT id, started_at, distance_mi, effort "
+                f"FROM ({RUNS_WITH_EFFORT}) WHERE {where} ORDER BY started_at",
+                effort_params + params,
             ).fetchall()
             out = []
             for r in runs:

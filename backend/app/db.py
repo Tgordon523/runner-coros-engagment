@@ -10,8 +10,9 @@ CREATE TABLE IF NOT EXISTS runs (
     distance_mi REAL NOT NULL,
     duration_s INTEGER NOT NULL,
     avg_pace_s_per_mi REAL,
-    avg_hr INTEGER,
-    effort TEXT                        -- easy|moderate|hard|max, NULL if no HR
+    avg_hr INTEGER
+    -- Effort is never stored: the store computes it at read time from avg_hr
+    -- and the current max-HR setting, so adjusting max HR re-buckets history.
 );
 
 CREATE TABLE IF NOT EXISTS track_points (
