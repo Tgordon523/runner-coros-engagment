@@ -80,7 +80,8 @@ def test_tracks_decimation_budget(store):
 
 def test_meta(store):
     assert store.meta() == {
-        "sports": [], "first_date": None, "last_date": None, "run_count": 0,
+        "sports": [], "efforts": ["easy", "moderate", "hard", "max"],
+        "first_date": None, "last_date": None, "run_count": 0,
     }
     store.add_run(make_run("a.fit", sport="running", local_date="2026-01-05"), [])
     store.add_run(make_run("b.fit", sport="running/trail", local_date="2026-06-15"), [])

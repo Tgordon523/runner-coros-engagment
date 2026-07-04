@@ -7,6 +7,8 @@
 import { LineLayer, PathLayer } from "@deck.gl/layers";
 import { TripsLayer } from "@deck.gl/geo-layers";
 import type { Layer } from "@deck.gl/core";
+import type { Timeline } from "./timeline";
+import { lat, lon, metricValue } from "./trackpoint";
 import type { GradientMetric, LayerMode, Track } from "./types";
 
 type RGB = [number, number, number];
@@ -31,12 +33,11 @@ interface Segment {
 }
 
 function toSegments(tracks: Track[], metric: GradientMetric): Segment[] {
-  const idx = metric === "hr" ? 3 : 4;
   let min = Infinity;
   let max = -Infinity;
   for (const tr of tracks)
     for (const p of tr.points) {
-      const v = p[idx];
+      const v = metricValue(p, metric);
       if (v != null) {
         if (v < min) min = v;
         if (v > max) max = v;
@@ -48,13 +49,13 @@ function toSegments(tracks: Track[], metric: GradientMetric): Segment[] {
     for (let i = 1; i < tr.points.length; i++) {
       const a = tr.points[i - 1];
       const b = tr.points[i];
-      const raw = b[idx];
+      const raw = metricValue(b, metric);
       let v: number | null = null;
       if (raw != null) {
         v = (raw - min) / span;
         if (metric === "pace") v = 1 - v; // faster = brighter
       }
-      segments.push({ s: [a[0], a[1]], t: [b[0], b[1]], v });
+      segments.push({ s: [lon(a), lat(a)], t: [lon(b), lat(b)], v });
     }
   return segments;
 }
@@ -63,7 +64,8 @@ export function buildLayers(
   tracks: Track[],
   mode: LayerMode,
   metric: GradientMetric,
-  currentTime: number
+  currentTime: number,
+  timeline: Timeline
 ): Layer[] {
   if (!tracks.length) return [];
 
@@ -72,7 +74,7 @@ export function buildLayers(
       new PathLayer<Track>({
         id: "heatmap",
         data: tracks,
-        getPath: (t) => t.points.flatMap((p) => [p[0], p[1]]),
+        getPath: (t) => t.points.flatMap((p) => [lon(p), lat(p)]),
         positionFormat: "XY",
         getColor: [...HEAT, 45],
         widthMinPixels: 2,
@@ -96,16 +98,15 @@ export function buildLayers(
     ];
   }
 
-  // timelapse: aligned-start — every run's t=0 is the animation's t=0, so
-  // trails branch outward simultaneously. Time mapping stays pluggable here
-  // for the future chronological mode.
+  // timelapse: the timeline owns all time mapping (aligned vs chronological);
+  // this layer just renders whatever timestamps it hands out.
   return [
     new TripsLayer<Track>({
       id: "timelapse",
       data: tracks,
-      getPath: (t) => t.points.flatMap((p) => [p[0], p[1]]),
+      getPath: (t) => t.points.flatMap((p) => [lon(p), lat(p)]),
       positionFormat: "XY",
-      getTimestamps: (t) => t.points.map((p) => p[2]),
+      getTimestamps: timeline.timestamps,
       getColor: TRAIL,
       currentTime,
       trailLength: 1e9, // cumulative: trails persist, network grows
@@ -113,17 +114,9 @@ export function buildLayers(
       widthMinPixels: 2,
       jointRounded: true,
       capRounded: true,
+      updateTriggers: { getTimestamps: timeline.mode },
     }),
   ];
-}
-
-export function maxDuration(tracks: Track[]): number {
-  let max = 0;
-  for (const t of tracks) {
-    const last = t.points[t.points.length - 1];
-    if (last && last[2] > max) max = last[2];
-  }
-  return max;
 }
 
 export function bounds(
@@ -132,10 +125,10 @@ export function bounds(
   let minLon = Infinity, minLat = Infinity, maxLon = -Infinity, maxLat = -Infinity;
   for (const t of tracks)
     for (const p of t.points) {
-      if (p[0] < minLon) minLon = p[0];
-      if (p[0] > maxLon) maxLon = p[0];
-      if (p[1] < minLat) minLat = p[1];
-      if (p[1] > maxLat) maxLat = p[1];
+      if (lon(p) < minLon) minLon = lon(p);
+      if (lon(p) > maxLon) maxLon = lon(p);
+      if (lat(p) < minLat) minLat = lat(p);
+      if (lat(p) > maxLat) maxLat = lat(p);
     }
   if (minLon === Infinity) return null;
   return [

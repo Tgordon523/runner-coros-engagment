@@ -8,6 +8,10 @@ A single-runner map and run tracker fed by COROS Pace 3 FIT files, with filterab
 A single recorded activity from the watch, parsed from one FIT file.
 _Avoid_: Activity, workout, session
 
+**Track Point**:
+One sampled moment within a Run — position plus time offset, heart rate, and pace.
+_Avoid_: GPS point, coordinate, sample
+
 **Effort**:
 A run's intensity bucket (Easy / Moderate / Hard / Max), computed at read time from average heart rate as a percentage of the current max HR setting — never stored, so adjusting max HR re-buckets all history.
 _Avoid_: Intensity, training load, RPE
@@ -29,5 +33,5 @@ A configured radius around a saved location (e.g., home); track points inside it
 _Avoid_: Blur, hidden area
 
 **Timelapse**:
-An animated map playback of run trails. Aligned-start mode (v1) aligns every run's t=0 so trails branch outward simultaneously; chronological mode (later) draws runs in date order.
+An animated map playback of run trails. Aligned-start mode aligns every run's t=0 so trails branch outward simultaneously; chronological mode draws runs in date order, each starting as the previous finishes.
 _Avoid_: Replay, animation

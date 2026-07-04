@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { bounds, buildLayers, maxDuration } from "./layers";
+import { bounds, buildLayers } from "./layers";
+import { buildTimeline } from "./timeline";
 import type { Track, TrackPoint } from "./types";
 
 function track(points: TrackPoint[], run_id = 1): Track {
@@ -12,8 +13,12 @@ const PTS: TrackPoint[] = [
   [-87.61, 41.9, 120, null, null],
 ];
 
-describe("bounds / maxDuration", () => {
-  it("bounds spans all points; null when empty", () => {
+function build(tracks: Track[], mode: Parameters<typeof buildLayers>[1], metric: "hr" | "pace", currentTime: number) {
+  return buildLayers(tracks, mode, metric, currentTime, buildTimeline(tracks, "aligned"));
+}
+
+describe("bounds", () => {
+  it("spans all points; null when empty", () => {
     expect(bounds([track(PTS)])).toEqual([
       [-87.63, 41.88],
       [-87.61, 41.9],
@@ -21,16 +26,11 @@ describe("bounds / maxDuration", () => {
     expect(bounds([])).toBeNull();
     expect(bounds([track([])])).toBeNull();
   });
-
-  it("maxDuration is the largest final t_offset across runs", () => {
-    expect(maxDuration([track(PTS), track([[-87.6, 41.8, 300, null, null]], 2)])).toBe(300);
-    expect(maxDuration([])).toBe(0);
-  });
 });
 
 describe("buildLayers — gradient segments through the public interface", () => {
   it("builds one segment per consecutive point pair, null metric dimmed", () => {
-    const [layer] = buildLayers([track(PTS)], "gradient", "hr", 0);
+    const [layer] = build([track(PTS)], "gradient", "hr", 0);
     const segments = (layer.props as unknown as { data: unknown[] }).data;
     expect(segments).toHaveLength(2);
     const getColor = (layer.props as unknown as { getColor: (d: unknown) => number[] }).getColor;
@@ -41,11 +41,11 @@ describe("buildLayers — gradient segments through the public interface", () =>
   });
 
   it("returns no layers for no tracks", () => {
-    expect(buildLayers([], "heatmap", "hr", 0)).toEqual([]);
+    expect(build([], "heatmap", "hr", 0)).toEqual([]);
   });
 
-  it("timelapse layer carries currentTime and per-point timestamps", () => {
-    const [layer] = buildLayers([track(PTS)], "timelapse", "hr", 42);
+  it("timelapse layer carries currentTime and the timeline's timestamps", () => {
+    const [layer] = build([track(PTS)], "timelapse", "hr", 42);
     const props = layer.props as unknown as {
       currentTime: number;
       getTimestamps: (t: Track) => number[];
