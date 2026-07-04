@@ -1,7 +1,8 @@
 # Run Tracker
 
 Map and run tracker for a COROS Pace 3 runner: filterable run history, mileage/goal
-dashboards, and map art (branching-trail timelapse, heatmap, HR/pace gradient trails).
+dashboards, and map art (timelapse — aligned-start or chronological — heatmap, and
+HR/pace gradient trails).
 
 - Vocabulary: [CONTEXT.md](CONTEXT.md)
 - Full plan (all 6 phases): [docs/PLAN.md](docs/PLAN.md)
@@ -31,8 +32,9 @@ Frontend tests: `docker compose exec frontend sh -c "cd /app && npm test"`
 | 5 — Dashboard | ✅ done | Weekly/cumulative/pace charts, goal card, settings UI over `/api/dashboard` + `/api/settings` |
 | 6 — Art export | ✅ done | Privacy-zone trim, timelapse recording, MP4 download |
 
-Post-v1 backlog: chronological timelapse mode, effort distribution chart, poster grid,
-elevation gradient trails, calendar feature, race-training goals.
+Post-v1 delivered so far: chronological timelapse mode (see below). Remaining
+backlog: effort distribution chart, poster grid, elevation gradient trails,
+calendar feature, race-training goals.
 
 ### Phase 1 — Skeleton ✅
 
@@ -72,9 +74,10 @@ fetch (`useFilters`):
 - **Heatmap** — alpha-stacked cyan paths; repetition builds brightness.
 - **Trails** — segments colored by HR or pace (sequential single-hue ramps,
   brighter = harder/faster).
-- **Timelapse** — aligned-start playback: every run's t=0 together, trails branch
-  outward and accumulate; play/pause/scrub, 10–600× speed. Time mapping is
-  pluggable for the future chronological mode.
+- **Timelapse** — animated playback with play/pause/scrub and 10–600× speed, in
+  two timing modes behind the `timeline` module: aligned-start (every run's t=0
+  together, trails branch outward and accumulate) and chronological (runs draw in
+  date order, each starting as the previous finishes).
 
 `/api/tracks` enforces a `max_points` budget; decimation (every-Nth, endpoints
 kept) is store implementation. Filter panel + Sync button with last-sync status.
@@ -100,8 +103,8 @@ kept) is store implementation. Filter panel + Sync button with last-sync status.
   rule is tested with points and circles, never by watching video. Zones (lat, lon,
   radius) are edited in settings; `GET /api/tracks?privacy=1` returns trimmed
   tracks, the local map is never trimmed.
-- **Recording**: in Timelapse mode, ⏺ Record plays one full aligned-start loop and
-  captures exactly what the map shows (composited basemap + trails via
+- **Recording**: in Timelapse mode, ⏺ Record plays one full loop in the selected
+  timing mode and captures exactly what the map shows (composited basemap + trails via
   MediaRecorder) — the recorder is `usePlayback`'s second consumer, and the speed
   slider doubles as video-length control. An "apply privacy zones" toggle previews
   and records the trimmed tracks.
@@ -109,7 +112,26 @@ kept) is store implementation. Filter panel + Sync button with last-sync status.
   the backend image, h264 + faststart); if transcoding ever fails the WebM
   downloads instead, so an export always lands.
 
-All six v1 phases are complete. Next up is the post-v1 backlog below.
+All six v1 phases are complete.
+
+### Post-v1 — module deepening + chronological timelapse ✅
+
+An architecture review deepened three modules; behavior is unchanged except one
+new feature:
+
+- **Timeline** (`frontend/src/timeline.ts`): all Timelapse timing —
+  per-point timestamps, duration, and the pause before the playback wraps — lives
+  behind `buildTimeline(tracks, mode)`. Aligned-start and the new
+  **chronological mode** (a Timing selector in the Timelapse controls) are its two
+  adapters; layers, the clock, and the recorder do no time math.
+- **Effort** (`backend/app/effort.py`): the bucket thresholds, the valid-name
+  set, and the SQL derivation live in one module with an import-time invariant
+  check. `/api/meta` serves the bucket names, so the filter panel can never
+  drift from the backend vocabulary.
+- **Track Point wire layout** (`backend/app/trackpoint.py` +
+  `frontend/src/trackpoint.ts`): the `[lon, lat, t_offset_s, hr, pace_s_per_mi]`
+  tuple order is defined once per side of the HTTP seam; every consumer goes
+  through named indices/accessors instead of hand-indexing.
 
 ## Data & privacy
 
