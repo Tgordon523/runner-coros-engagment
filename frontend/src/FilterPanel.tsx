@@ -2,7 +2,6 @@ import type { Meta } from "./types";
 import type { Filters } from "./useFilters";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const EFFORTS = ["easy", "moderate", "hard", "max"];
 const TIMES = ["morning", "lunch", "evening", "night"];
 
 function toggle<T>(list: T[], v: T): T[] {
@@ -64,7 +63,7 @@ export default function FilterPanel({ filters, onChange, meta }: Props) {
       <div className="field">
         <span>Effort</span>
         <div className="chips">
-          {EFFORTS.map((e) => (
+          {(meta?.efforts ?? []).map((e) => (
             <button
               key={e}
               className={filters.efforts.includes(e) ? "chip on" : "chip"}

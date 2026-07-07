@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import DashboardView from "./DashboardView";
 import FilterPanel from "./FilterPanel";
 import MapView from "./MapView";
 import SyncPanel from "./SyncPanel";
-import { maxDuration } from "./layers";
+import { buildTimeline, type TimelineMode } from "./timeline";
 import type { GradientMetric, LayerMode } from "./types";
 import {
   defaultFilters,
@@ -32,17 +32,22 @@ export default function App() {
 
   const [mode, setMode] = useState<LayerMode>("heatmap");
   const [metric, setMetric] = useState<GradientMetric>("hr");
+  const [timelineMode, setTimelineMode] = useState<TimelineMode>("aligned");
   const mapRef = useRef<HTMLElement>(null);
 
-  const duration = maxDuration(tracks);
-  const playback = usePlayback(duration, mode === "timelapse" && view === "map");
+  const timeline = useMemo(
+    () => buildTimeline(tracks, timelineMode),
+    [tracks, timelineMode]
+  );
+  const duration = timeline.duration;
+  const playback = usePlayback(timeline, mode === "timelapse" && view === "map");
   const recorder = useRecorder();
 
   useEffect(() => {
     if (mode === "timelapse") playback.reset();
     else playback.setPlaying(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, tracks]);
+  }, [mode, tracks, timelineMode]);
 
   // one full loop per recording: stop when the clock reaches the end
   useEffect(() => {
@@ -113,6 +118,14 @@ export default function App() {
 
             {mode === "timelapse" && (
               <div className="field">
+                <span>Timing</span>
+                <select
+                  value={timelineMode}
+                  onChange={(e) => setTimelineMode(e.target.value as TimelineMode)}
+                >
+                  <option value="aligned">Aligned start</option>
+                  <option value="chronological">Chronological</option>
+                </select>
                 <span>
                   Playback · {fmt(playback.time)} / {fmt(duration)}
                 </span>
@@ -194,6 +207,7 @@ export default function App() {
             mode={mode}
             metric={metric}
             currentTime={playback.time}
+            timeline={timeline}
           />
         ) : (
           <DashboardView

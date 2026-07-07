@@ -1,7 +1,9 @@
 /** The Timelapse clock: rAF loop, wrap-around, and speed are implementation.
- * Second adapter arrives with Phase 6's frame-by-frame MP4 renderer. */
+ * Duration and the pause-before-wrap come from the timeline — the clock does
+ * no time math of its own. */
 
 import { useEffect, useRef, useState } from "react";
+import type { Timeline } from "./timeline";
 
 export interface Playback {
   time: number;
@@ -13,7 +15,11 @@ export interface Playback {
   reset: () => void;
 }
 
-export function usePlayback(duration: number, active: boolean): Playback {
+export function usePlayback(
+  timeline: Pick<Timeline, "duration" | "tailPadding">,
+  active: boolean
+): Playback {
+  const { duration, tailPadding } = timeline;
   const [playing, setPlaying] = useState(false);
   const [time, setTime] = useState(0);
   const [speed, setSpeed] = useState(60);
@@ -25,12 +31,12 @@ export function usePlayback(duration: number, active: boolean): Playback {
     const tick = (now: number) => {
       const dt = (now - last) / 1000;
       last = now;
-      setTime((t) => (duration ? (t + dt * speed) % (duration + 60) : 0));
+      setTime((t) => (duration ? (t + dt * speed) % (duration + tailPadding) : 0));
       rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current!);
-  }, [playing, active, speed, duration]);
+  }, [playing, active, speed, duration, tailPadding]);
 
   return {
     time,

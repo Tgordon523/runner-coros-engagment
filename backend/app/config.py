@@ -12,11 +12,3 @@ DEFAULT_ANNUAL_GOAL_MI = 0  # user sets in app; 0 = unset
 COROS_EMAIL = os.environ.get("COROS_EMAIL", "")
 COROS_PASSWORD = os.environ.get("COROS_PASSWORD", "")
 LOCAL_TZ = os.environ.get("LOCAL_TZ", "America/Chicago")
-
-# Effort buckets as fraction of max HR (upper bound exclusive; see CONTEXT.md)
-EFFORT_BUCKETS = [
-    ("easy", 0.0, 0.70),
-    ("moderate", 0.70, 0.80),
-    ("hard", 0.80, 0.90),
-    ("max", 0.90, 10.0),
-]

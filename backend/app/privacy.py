@@ -3,6 +3,8 @@ applied to exports only; local views always get full tracks."""
 
 import math
 
+from .trackpoint import LAT, LON
+
 EARTH_R_M = 6_371_000.0
 
 
@@ -18,7 +20,8 @@ def _dist_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
 def apply_privacy_zones(tracks: list[dict], zones: list[dict]) -> list[dict]:
     """Drop track points inside any zone ({lat, lon, radius_m}).
 
-    Points are [lon, lat, ...]; runs whose every point is trimmed disappear.
+    Points use the trackpoint wire layout; runs whose every point is trimmed
+    disappear.
     """
     if not zones:
         return tracks
@@ -28,7 +31,8 @@ def apply_privacy_zones(tracks: list[dict], zones: list[dict]) -> list[dict]:
             p
             for p in track["points"]
             if not any(
-                _dist_m(p[1], p[0], z["lat"], z["lon"]) <= z["radius_m"] for z in zones
+                _dist_m(p[LAT], p[LON], z["lat"], z["lon"]) <= z["radius_m"]
+                for z in zones
             )
         ]
         if kept:

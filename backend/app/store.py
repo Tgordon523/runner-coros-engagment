@@ -8,37 +8,25 @@ import threading
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
-from .config import EFFORT_BUCKETS, LOCAL_TZ, MAX_HR
+from . import effort
+from .config import LOCAL_TZ, MAX_HR
 from .dashboard import pace_trend, weekly_mileage
 from .db import SCHEMA
 from .filters import RunFilter
 from .goal import goal_status
 from .ingest.derive import RunRow
 from .ingest.parser import TrackPoint
+from .trackpoint import WIRE_SELECT
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _effort_case() -> tuple[str, int]:
-    """SQL CASE computing the Effort bucket from avg_hr and a bound max HR.
-
-    Generated from EFFORT_BUCKETS so config stays the single source of truth.
-    Returns (sql, number of max-HR parameters to bind).
-    """
-    whens = " ".join(
-        f"WHEN avg_hr < {hi} * ? THEN '{name}'" for name, _, hi in EFFORT_BUCKETS[:-1]
-    )
-    last = EFFORT_BUCKETS[-1][0]
-    sql = f"CASE WHEN avg_hr IS NULL THEN NULL {whens} ELSE '{last}' END"
-    return sql, len(EFFORT_BUCKETS) - 1
-
-
 # Inner select: the runs table plus computed effort. Filters (including the
 # Effort filter) run against this in an outer query, so RunFilter stays
 # ignorant of how effort is derived.
-_CASE_SQL, _CASE_PARAMS = _effort_case()
+_CASE_SQL, _CASE_PARAMS = effort.case_sql()
 RUNS_WITH_EFFORT = f"SELECT *, {_CASE_SQL} AS effort FROM runs"
 
 
@@ -158,7 +146,7 @@ class Store:
 
     def tracks(self, f: RunFilter, max_points: int = 150_000) -> list[dict]:
         """Filtered tracks for map layers: one entry per run, points as
-        [lon, lat, t_offset_s, hr, pace_s_per_mi] tuples (deck.gl-friendly).
+        positional tuples in the trackpoint.WIRE_COLUMNS order.
 
         The interface promises at most ~max_points total; decimation strategy
         (currently every-Nth per run, endpoints kept) is implementation.
@@ -182,7 +170,7 @@ class Store:
             out = []
             for r in runs:
                 pts = self._conn.execute(
-                    """SELECT lon, lat, t_offset_s, hr, pace_s_per_mi
+                    f"""SELECT {WIRE_SELECT}
                        FROM track_points
                        WHERE run_id = ? AND (seq % ? = 0 OR seq =
                            (SELECT MAX(seq) FROM track_points WHERE run_id = ?))
@@ -235,6 +223,7 @@ class Store:
             ).fetchone()
         return {
             "sports": sports,
+            "efforts": effort.NAMES,
             "first_date": row["first"],
             "last_date": row["last"],
             "run_count": row["count"],

@@ -3,6 +3,7 @@ import maplibregl from "maplibre-gl";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { bounds, buildLayers } from "./layers";
+import type { Timeline } from "./timeline";
 import type { GradientMetric, LayerMode, Track } from "./types";
 
 const DARK_STYLE =
@@ -13,9 +14,10 @@ interface Props {
   mode: LayerMode;
   metric: GradientMetric;
   currentTime: number;
+  timeline: Timeline;
 }
 
-export default function MapView({ tracks, mode, metric, currentTime }: Props) {
+export default function MapView({ tracks, mode, metric, currentTime, timeline }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const overlayRef = useRef<MapboxOverlay | null>(null);
@@ -44,9 +46,9 @@ export default function MapView({ tracks, mode, metric, currentTime }: Props) {
 
   useEffect(() => {
     overlayRef.current?.setProps({
-      layers: buildLayers(tracks, mode, metric, currentTime),
+      layers: buildLayers(tracks, mode, metric, currentTime, timeline),
     });
-  }, [tracks, mode, metric, currentTime]);
+  }, [tracks, mode, metric, currentTime, timeline]);
 
   // fit once per distinct set of runs, not on every filter tick
   useEffect(() => {

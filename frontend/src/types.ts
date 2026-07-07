@@ -1,5 +1,6 @@
-/** [lon, lat, t_offset_s, hr, pace_s_per_mi] — matches /api/tracks points. */
-export type TrackPoint = [number, number, number, number | null, number | null];
+import type { TrackPoint } from "./trackpoint";
+
+export type { TrackPoint };
 
 export interface Track {
   run_id: number;
@@ -11,6 +12,7 @@ export interface Track {
 
 export interface Meta {
   sports: string[];
+  efforts: string[];
   first_date: string | null;
   last_date: string | null;
   run_count: number;

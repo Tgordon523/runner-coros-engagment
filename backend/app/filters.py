@@ -12,9 +12,10 @@ from zoneinfo import ZoneInfo
 from fastapi import HTTPException, Query
 
 from .config import LOCAL_TZ
+from .effort import NAMES as EFFORT_NAMES
 
 PRESET_DAYS = {"7d": 7, "30d": 30, "90d": 90}
-EFFORTS = {"easy", "moderate", "hard", "max"}
+EFFORTS = set(EFFORT_NAMES)
 TIMES_OF_DAY = {"morning", "lunch", "evening", "night"}
 
 
