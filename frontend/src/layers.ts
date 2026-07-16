@@ -1,15 +1,17 @@
 /** deck.gl layer construction for the three map modes.
  *
- * Colors: brightness carries magnitude on the dark basemap; sequential
- * single-hue ramps per metric (no rainbow), dim slate for missing values.
+ * Colors: the gradient layer buckets each Track Point into a discrete zone —
+ * HR by Effort, pace by the user's Pace Zones (CONTEXT.md) — with dim slate
+ * for missing values. Bright hues are deliberate: the basemap is dark.
  */
 
 import { LineLayer, PathLayer } from "@deck.gl/layers";
 import { TripsLayer } from "@deck.gl/geo-layers";
 import type { Layer } from "@deck.gl/core";
 import type { Timeline } from "./timeline";
-import { lat, lon, metricValue } from "./trackpoint";
+import { lat, lon } from "./trackpoint";
 import type { GradientMetric, LayerMode, Track } from "./types";
+import { pointZone, type ZoneConfig } from "./zones";
 
 type RGB = [number, number, number];
 
@@ -17,45 +19,35 @@ const HEAT: RGB = [34, 211, 238]; // cyan, alpha-stacked for density
 const TRAIL: RGB = [52, 211, 153]; // emerald timelapse trail
 const MISSING: RGB = [100, 116, 139]; // slate for null metric values
 
-// sequential ramps, dark -> bright (bright = more)
-const HR_RAMP: [RGB, RGB] = [[80, 20, 20], [252, 165, 165]];
-const PACE_RAMP: [RGB, RGB] = [[69, 26, 3], [251, 191, 36]];
-
-function lerp(ramp: [RGB, RGB], v: number): RGB {
-  const [a, b] = ramp;
-  return [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * v)) as RGB;
-}
+// easy → max; CVD-separated and ≥3:1 against the dark basemap (validated)
+export const ZONE_COLORS: RGB[] = [
+  [52, 211, 153], // easy — emerald
+  [250, 204, 21], // moderate — yellow
+  [251, 146, 60], // hard — orange
+  [248, 113, 113], // max — red
+];
 
 interface Segment {
   s: [number, number];
   t: [number, number];
-  v: number | null; // normalized 0..1, null when metric missing
+  z: number | null; // zone index (0=easy … 3=max), null when unbucketable
 }
 
-function toSegments(tracks: Track[], metric: GradientMetric): Segment[] {
-  let min = Infinity;
-  let max = -Infinity;
-  for (const tr of tracks)
-    for (const p of tr.points) {
-      const v = metricValue(p, metric);
-      if (v != null) {
-        if (v < min) min = v;
-        if (v > max) max = v;
-      }
-    }
-  const span = max - min || 1;
+function toSegments(
+  tracks: Track[],
+  metric: GradientMetric,
+  zones: ZoneConfig
+): Segment[] {
   const segments: Segment[] = [];
   for (const tr of tracks)
     for (let i = 1; i < tr.points.length; i++) {
       const a = tr.points[i - 1];
       const b = tr.points[i];
-      const raw = metricValue(b, metric);
-      let v: number | null = null;
-      if (raw != null) {
-        v = (raw - min) / span;
-        if (metric === "pace") v = 1 - v; // faster = brighter
-      }
-      segments.push({ s: [lon(a), lat(a)], t: [lon(b), lat(b)], v });
+      segments.push({
+        s: [lon(a), lat(a)],
+        t: [lon(b), lat(b)],
+        z: pointZone(b, metric, zones),
+      });
     }
   return segments;
 }
@@ -65,7 +57,8 @@ export function buildLayers(
   mode: LayerMode,
   metric: GradientMetric,
   currentTime: number,
-  timeline: Timeline
+  timeline: Timeline,
+  zones: ZoneConfig
 ): Layer[] {
   if (!tracks.length) return [];
 
@@ -88,10 +81,10 @@ export function buildLayers(
     return [
       new LineLayer<Segment>({
         id: "gradient",
-        data: toSegments(tracks, metric),
+        data: toSegments(tracks, metric, zones),
         getSourcePosition: (d) => d.s,
         getTargetPosition: (d) => d.t,
-        getColor: (d) => (d.v == null ? [...MISSING, 120] : [...lerp(metric === "hr" ? HR_RAMP : PACE_RAMP, d.v), 200]),
+        getColor: (d) => (d.z == null ? [...MISSING, 120] : [...ZONE_COLORS[d.z], 200]),
         widthMinPixels: 2,
         updateTriggers: { getColor: metric },
       }),

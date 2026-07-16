@@ -16,8 +16,13 @@ export function yTicks(max: number, n = 4): number[] {
   const raw = max / n;
   const mag = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? raw;
+  // The last tick must reach max — charts use it as yMax, so stopping
+  // short would clip data above the top gridline.
   const out: number[] = [];
-  for (let v = 0; v <= max + 1e-9; v += step) out.push(v);
+  for (let v = 0; ; v += step) {
+    out.push(v);
+    if (v >= max - 1e-9) break;
+  }
   return out;
 }
 

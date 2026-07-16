@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, Query
 
-from .config import LOCAL_TZ
+from .config import LOCAL_TZ, MIN_RUN_MI
 from .effort import NAMES as EFFORT_NAMES
 
 PRESET_DAYS = {"7d": 7, "30d": 30, "90d": 90}
@@ -41,8 +41,12 @@ class RunFilter:
     max_mi: float | None = None
 
     def where(self) -> tuple[str, list]:
-        """Build the WHERE clause (without the keyword) and its parameters."""
-        conds, params = [], []
+        """Build the WHERE clause (without the keyword) and its parameters.
+
+        Always starts with the Run floor: activities under MIN_RUN_MI are
+        not Runs and match no query, beneath any user-set min_mi.
+        """
+        conds, params = ["distance_mi >= ?"], [MIN_RUN_MI]
         if self.start:
             conds.append("local_date >= ?")
             params.append(self.start.isoformat())
@@ -64,7 +68,7 @@ class RunFilter:
         if self.max_mi is not None:
             conds.append("distance_mi <= ?")
             params.append(self.max_mi)
-        return (" AND ".join(conds) or "1=1", params)
+        return (" AND ".join(conds), params)
 
 
 def resolve_period(

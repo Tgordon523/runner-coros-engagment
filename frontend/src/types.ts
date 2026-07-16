@@ -16,6 +16,9 @@ export interface Meta {
   first_date: string | null;
   last_date: string | null;
   run_count: number;
+  max_hr: number;
+  effort_bounds_pct: number[];
+  pace_zone_s_per_mi: number[];
 }
 
 export interface SyncStatus {
@@ -30,6 +33,12 @@ export type GradientMetric = "hr" | "pace";
 
 export interface WeekBucket {
   week_start: string;
+  miles: number;
+  cumulative_mi: number;
+}
+
+export interface DayBucket {
+  date: string;
   miles: number;
   cumulative_mi: number;
 }
@@ -54,6 +63,7 @@ export interface GoalStatus {
 
 export interface Dashboard {
   weekly: WeekBucket[];
+  daily: DayBucket[];
   pace_trend: PacePoint[];
   goal: GoalStatus;
 }
@@ -68,4 +78,6 @@ export interface Settings {
   annual_goal_mi: number;
   max_hr: number;
   privacy_zones: PrivacyZone[];
+  start_zone_enabled: boolean;
+  pace_zone_s_per_mi: number[];
 }

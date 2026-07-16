@@ -1,26 +1,21 @@
 import GoalCard from "./GoalCard";
-import SettingsPanel from "./SettingsPanel";
 import CumulativeMileage from "./charts/CumulativeMileage";
+import Mileage from "./charts/Mileage";
 import PaceTrend from "./charts/PaceTrend";
-import WeeklyMileage from "./charts/WeeklyMileage";
 import { fmtDate, fmtPace } from "./charts/common";
 import type { Dashboard } from "./types";
 
 interface Props {
   data: Dashboard | null;
-  onSettingsSaved: () => void;
 }
 
-export default function DashboardView({ data, onSettingsSaved }: Props) {
+export default function DashboardView({ data }: Props) {
   if (!data) return <p className="empty">Loading dashboard…</p>;
 
   return (
     <div className="dashboard">
-      <div className="dash-row">
-        <GoalCard goal={data.goal} />
-        <SettingsPanel onSaved={onSettingsSaved} />
-      </div>
-      <WeeklyMileage weeks={data.weekly} />
+      <GoalCard goal={data.goal} />
+      <Mileage weeks={data.weekly} daily={data.daily} />
       <CumulativeMileage weeks={data.weekly} />
       <PaceTrend trend={data.pace_trend} />
 

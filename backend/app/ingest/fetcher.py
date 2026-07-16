@@ -7,12 +7,20 @@ depends only on the folder contents, never on this module.
 import logging
 from pathlib import Path
 
+import corosexport.client
 from corosexport.client import CorosClient
 from corosexport.models import ActivityType, ExportFormat
 
-from ..config import COROS_EMAIL, COROS_PASSWORD
+from ..config import COROS_API_BASE, COROS_EMAIL, COROS_PASSWORD
 
 logger = logging.getLogger(__name__)
+
+# corosexport 0.1.4 hardcodes the EU host; rebind its endpoints to the
+# account's home region or every data call fails with code 1019.
+corosexport.client.COROS_BASE_URL = COROS_API_BASE
+corosexport.client.AUTH_ENDPOINT = f"{COROS_API_BASE}/account/login"
+corosexport.client.ACTIVITIES_ENDPOINT = f"{COROS_API_BASE}/activity/query"
+corosexport.client.DOWNLOAD_ENDPOINT = f"{COROS_API_BASE}/activity/detail/download"
 
 RUN_TYPES = {ActivityType.RUNNING, ActivityType.TRAIL_RUNNING}
 

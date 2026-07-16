@@ -31,6 +31,23 @@ function lastOffset(t: Track): number {
   return last ? tOffsetS(last) : 0;
 }
 
+/** One clock tick: step the clock `step` seconds forward, wrapping through
+ * the tail padding. `atEnd` is true when the unwrapped clock reached
+ * `duration` — the record-one-full-loop boundary. A single tick can jump from
+ * before the end to past the wrap; `atEnd` still reports the crossing. */
+export function advance(
+  time: number,
+  step: number,
+  tl: Pick<Timeline, "duration" | "tailPadding">
+): { time: number; atEnd: boolean } {
+  if (!tl.duration) return { time: 0, atEnd: false };
+  const next = time + step;
+  return {
+    time: next % (tl.duration + tl.tailPadding),
+    atEnd: next >= tl.duration,
+  };
+}
+
 export function buildTimeline(tracks: Track[], mode: TimelineMode): Timeline {
   const starts = new Map<number, number>();
   let duration = 0;

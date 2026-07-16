@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DashboardView from "./DashboardView";
 import FilterPanel from "./FilterPanel";
 import MapView from "./MapView";
+import SettingsPanel from "./SettingsPanel";
 import SyncPanel from "./SyncPanel";
+import type { CaptureSurface } from "./recording";
 import { buildTimeline, type TimelineMode } from "./timeline";
 import type { GradientMetric, LayerMode } from "./types";
 import {
@@ -12,8 +14,8 @@ import {
   useTracks,
   type Filters,
 } from "./useFilters";
-import { usePlayback } from "./usePlayback";
-import { useRecorder } from "./useRecorder";
+import { useTimelapse } from "./useTimelapse";
+import type { ZoneConfig } from "./zones";
 
 const MODES: { id: LayerMode; label: string }[] = [
   { id: "heatmap", label: "Heatmap" },
@@ -22,7 +24,7 @@ const MODES: { id: LayerMode; label: string }[] = [
 ];
 
 export default function App() {
-  const [view, setView] = useState<"map" | "dashboard">("map");
+  const [view, setView] = useState<"map" | "dashboard" | "settings">("map");
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [refreshKey, setRefreshKey] = useState(0);
   const [privacyOn, setPrivacyOn] = useState(false);
@@ -33,15 +35,26 @@ export default function App() {
   const [mode, setMode] = useState<LayerMode>("heatmap");
   const [metric, setMetric] = useState<GradientMetric>("hr");
   const [timelineMode, setTimelineMode] = useState<TimelineMode>("aligned");
-  const mapRef = useRef<HTMLElement>(null);
+  const surfaceRef = useRef<CaptureSurface | null>(null);
+  const captureSurface = useCallback((s: CaptureSurface | null) => {
+    surfaceRef.current = s;
+  }, []);
 
   const timeline = useMemo(
     () => buildTimeline(tracks, timelineMode),
     [tracks, timelineMode]
   );
+  // zone config rides on meta so saving Settings re-colors the map
+  const zones = useMemo<ZoneConfig>(
+    () => ({
+      maxHr: meta?.max_hr ?? 190,
+      effortBoundsPct: meta?.effort_bounds_pct ?? [0.7, 0.8, 0.9],
+      paceBoundsSPerMi: meta?.pace_zone_s_per_mi ?? [],
+    }),
+    [meta]
+  );
   const duration = timeline.duration;
-  const playback = usePlayback(timeline, mode === "timelapse" && view === "map");
-  const recorder = useRecorder();
+  const playback = useTimelapse(timeline, mode === "timelapse" && view === "map");
 
   useEffect(() => {
     if (mode === "timelapse") playback.reset();
@@ -49,20 +62,8 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, tracks, timelineMode]);
 
-  // one full loop per recording: stop when the clock reaches the end
-  useEffect(() => {
-    if (recorder.state === "recording" && duration > 0 && playback.time >= duration) {
-      recorder.stop();
-      playback.setPlaying(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playback.time, recorder.state, duration]);
-
   const record = () => {
-    if (!mapRef.current) return;
-    playback.seek(0);
-    playback.setPlaying(true);
-    recorder.start(mapRef.current);
+    if (surfaceRef.current) playback.record(surfaceRef.current);
   };
 
   const fmt = (s: number) =>
@@ -84,6 +85,12 @@ export default function App() {
             onClick={() => setView("dashboard")}
           >
             Dashboard
+          </button>
+          <button
+            className={view === "settings" ? "mode on" : "mode"}
+            onClick={() => setView("settings")}
+          >
+            Settings
           </button>
         </div>
 
@@ -166,14 +173,18 @@ export default function App() {
                 </label>
                 <div className="playback">
                   <button
-                    onClick={recorder.state === "recording" ? recorder.stop : record}
-                    disabled={recorder.state === "converting" || !tracks.length}
+                    onClick={
+                      playback.recording === "recording"
+                        ? playback.stopRecording
+                        : record
+                    }
+                    disabled={playback.recording === "converting" || !tracks.length}
                   >
-                    {recorder.state === "idle" && "⏺ Record MP4"}
-                    {recorder.state === "recording" && "⏹ Stop"}
-                    {recorder.state === "converting" && "Converting…"}
+                    {playback.recording === "idle" && "⏺ Record MP4"}
+                    {playback.recording === "recording" && "⏹ Stop"}
+                    {playback.recording === "converting" && "Converting…"}
                   </button>
-                  {recorder.state === "recording" && duration > 0 && (
+                  {playback.recording === "recording" && duration > 0 && (
                     <span className="dim">
                       {Math.min(100, Math.round((playback.time / duration) * 100))}%
                     </span>
@@ -200,7 +211,7 @@ export default function App() {
               }`}
         </p>
       </aside>
-      <main className="map" ref={mapRef}>
+      <main className="map">
         {view === "map" ? (
           <MapView
             tracks={tracks}
@@ -208,12 +219,15 @@ export default function App() {
             metric={metric}
             currentTime={playback.time}
             timeline={timeline}
+            zones={zones}
+            onCaptureSurface={captureSurface}
           />
+        ) : view === "dashboard" ? (
+          <DashboardView data={dashboard} />
         ) : (
-          <DashboardView
-            data={dashboard}
-            onSettingsSaved={() => setRefreshKey((k) => k + 1)}
-          />
+          <div className="dashboard">
+            <SettingsPanel onSaved={() => setRefreshKey((k) => k + 1)} />
+          </div>
         )}
       </main>
     </div>

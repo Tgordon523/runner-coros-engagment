@@ -82,6 +82,8 @@ def test_meta(store):
     assert store.meta() == {
         "sports": [], "efforts": ["easy", "moderate", "hard", "max"],
         "first_date": None, "last_date": None, "run_count": 0,
+        "max_hr": 190, "effort_bounds_pct": [0.70, 0.80, 0.90],
+        "pace_zone_s_per_mi": [],
     }
     store.add_run(make_run("a.fit", sport="running", local_date="2026-01-05"), [])
     store.add_run(make_run("b.fit", sport="running/trail", local_date="2026-06-15"), [])
@@ -114,6 +116,30 @@ def test_dashboard_split_filtering(store):
     assert d["goal"]["ytd_mi"] == 16
     assert d["goal"]["target_mi"] == 1000
     assert d["goal"]["on_track"] is False
+
+
+def test_sub_mile_activities_are_not_runs(store):
+    """Under MIN_RUN_MI: stored, but invisible to every read path."""
+    store.add_run(make_run("short.fit", distance_mi=0.6, local_date="2026-01-02",
+                           sport="walking"), [_pt(0), _pt(1)])
+    store.add_run(make_run("real.fit", distance_mi=5.0, local_date="2026-03-02"), [])
+    store.set_setting("annual_goal_mi", "1000")
+
+    assert [r["fit_filename"] for r in store.runs(RunFilter())] == ["real.fit"]
+    assert ["real.fit"] == [
+        r["fit_filename"]
+        for t in store.tracks(RunFilter())
+        for r in store.runs(RunFilter())
+        if r["id"] == t["run_id"]
+    ]
+    d = store.dashboard(RunFilter(), today=date(2026, 7, 2))
+    assert d["goal"]["ytd_mi"] == 5.0
+    m = store.meta()
+    assert m["run_count"] == 1
+    assert m["sports"] == ["running"]
+    assert m["first_date"] == "2026-03-02"
+    # still stored: re-ingest is not required to change the cutoff
+    assert store.has_run("short.fit")
 
 
 def test_sync_log_roundtrip(store):

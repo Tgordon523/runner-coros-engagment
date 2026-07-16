@@ -41,6 +41,27 @@ def weekly_mileage(runs: list[dict]) -> list[dict]:
     return out
 
 
+def daily_mileage(runs: list[dict]) -> list[dict]:
+    """Miles per Run Day plus running cumulative. Only days with runs appear
+    — no gap fill, unlike weeks (see CONTEXT.md "Run Day")."""
+    by_day: dict[str, float] = {}
+    for r in runs:
+        d = r["local_date"]
+        by_day[d] = by_day.get(d, 0.0) + r["distance_mi"]
+    out = []
+    cumulative = 0.0
+    for d in sorted(by_day):
+        cumulative += by_day[d]
+        out.append(
+            {
+                "date": d,
+                "miles": round(by_day[d], 2),
+                "cumulative_mi": round(cumulative, 2),
+            }
+        )
+    return out
+
+
 def pace_trend(runs: list[dict], window: int = 5) -> list[dict]:
     """Per-run avg pace in date order with a rolling mean over `window` runs."""
     dated = sorted(

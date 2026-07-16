@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..deps import get_store
 from ..filters import RunFilter, run_filter
-from ..privacy import apply_privacy_zones
+from ..privacy import apply_privacy_zones, apply_start_zones
 from ..store import Store
 
 router = APIRouter(prefix="/api", tags=["runs"])
@@ -40,4 +40,6 @@ def tracks(
     result = store.tracks(f, max_points)
     if privacy:
         result = apply_privacy_zones(result, store.privacy_zones())
+        if store.start_zone_enabled():
+            result = apply_start_zones(result)
     return result
