@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { bounds, buildLayers } from "./layers";
+import { ZONE_COLORS, bounds, buildLayers } from "./layers";
 import { buildTimeline } from "./timeline";
 import type { Track, TrackPoint } from "./types";
+import type { ZoneConfig } from "./zones";
+
+const ZONES: ZoneConfig = {
+  maxHr: 190,
+  effortBoundsPct: [0.7, 0.8, 0.9],
+  paceBoundsSPerMi: [510, 570, 630],
+};
 
 function track(points: TrackPoint[], run_id = 1): Track {
   return { run_id, started_at: "2026-06-01T12:00:00Z", distance_mi: 5, effort: "easy", points };
@@ -14,7 +21,7 @@ const PTS: TrackPoint[] = [
 ];
 
 function build(tracks: Track[], mode: Parameters<typeof buildLayers>[1], metric: "hr" | "pace", currentTime: number) {
-  return buildLayers(tracks, mode, metric, currentTime, buildTimeline(tracks, "aligned"));
+  return buildLayers(tracks, mode, metric, currentTime, buildTimeline(tracks, "aligned"), ZONES);
 }
 
 describe("bounds", () => {
@@ -37,7 +44,17 @@ describe("buildLayers — gradient segments through the public interface", () =>
     const colored = getColor(segments[0]);
     const missing = getColor(segments[1]); // second segment ends on null HR
     expect(missing).toEqual([100, 116, 139, 120]);
-    expect(colored).not.toEqual(missing);
+    // 150 bpm at max 190 = 79% -> moderate zone color
+    expect(colored).toEqual([...ZONE_COLORS[1], 200]);
+  });
+
+  it("colors pace segments by Pace Zone from the config", () => {
+    const [layer] = build([track(PTS)], "gradient", "pace", 0);
+    const segments = (layer.props as unknown as { data: unknown[] }).data;
+    const getColor = (layer.props as unknown as { getColor: (d: unknown) => number[] }).getColor;
+    // 480 s/mi is faster than the 510 threshold -> max zone
+    expect(getColor(segments[0])).toEqual([...ZONE_COLORS[3], 200]);
+    expect(getColor(segments[1])).toEqual([100, 116, 139, 120]); // null pace
   });
 
   it("returns no layers for no tracks", () => {

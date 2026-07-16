@@ -17,6 +17,10 @@ BUCKETS: list[tuple[str, float | None]] = [
 
 NAMES: list[str] = [name for name, _ in BUCKETS]
 
+# ascending bound fractions, served to the map so per-point HR coloring
+# uses the same bucketing as run-level Effort
+BOUNDS_PCT: list[float] = [hi for _, hi in BUCKETS[:-1]]
+
 
 def _check_invariants() -> None:
     if BUCKETS[-1][1] is not None:

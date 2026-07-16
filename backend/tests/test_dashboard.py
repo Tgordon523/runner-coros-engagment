@@ -1,4 +1,4 @@
-from app.dashboard import pace_trend, weekly_mileage
+from app.dashboard import daily_mileage, pace_trend, weekly_mileage
 
 
 def _run(id, local_date, distance_mi=5.0, pace=480.0):
@@ -24,6 +24,23 @@ def test_weekly_buckets_and_gap_fill():
 
 def test_weekly_empty():
     assert weekly_mileage([]) == []
+
+
+def test_daily_sums_run_days_without_gap_fill():
+    runs = [
+        _run(1, "2026-06-01", 3),
+        _run(2, "2026-06-01", 5),   # second run same day -> one bucket
+        _run(3, "2026-06-16", 10),  # two-week gap occupies no space
+    ]
+    days = daily_mileage(runs)
+    assert days == [
+        {"date": "2026-06-01", "miles": 8, "cumulative_mi": 8},
+        {"date": "2026-06-16", "miles": 10, "cumulative_mi": 18},
+    ]
+
+
+def test_daily_empty():
+    assert daily_mileage([]) == []
 
 
 def test_pace_trend_rolling_and_nulls():

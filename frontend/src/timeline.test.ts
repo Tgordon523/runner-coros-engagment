@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTimeline, TAIL_PADDING_S } from "./timeline";
+import { advance, buildTimeline, TAIL_PADDING_S } from "./timeline";
 import type { Track, TrackPoint } from "./types";
 
 function track(run_id: number, started_at: string, lastOffset: number): Track {
@@ -25,6 +25,32 @@ describe("aligned timeline", () => {
   it("empty tracks yield zero duration", () => {
     expect(buildTimeline([], "aligned").duration).toBe(0);
     expect(buildTimeline([{ ...EARLY, points: [] }], "aligned").duration).toBe(0);
+  });
+});
+
+describe("advance", () => {
+  const tl = { duration: 300, tailPadding: TAIL_PADDING_S };
+
+  it("steps the clock and flags the loop end", () => {
+    expect(advance(100, 50, tl)).toEqual({ time: 150, atEnd: false });
+    expect(advance(299, 2, tl)).toEqual({ time: 301, atEnd: true });
+  });
+
+  it("wraps through the tail padding", () => {
+    expect(advance(350, 20, tl)).toEqual({ time: 10, atEnd: true });
+  });
+
+  it("one big tick cannot skip the loop end", () => {
+    // a fast clock can jump from before the end to past the wrap in one
+    // tick; atEnd still reports the crossing (the old poll missed this)
+    expect(advance(200, 500, tl)).toEqual({ time: 340, atEnd: true });
+  });
+
+  it("zero duration pins the clock at 0", () => {
+    expect(advance(5, 10, { duration: 0, tailPadding: TAIL_PADDING_S })).toEqual({
+      time: 0,
+      atEnd: false,
+    });
   });
 });
 

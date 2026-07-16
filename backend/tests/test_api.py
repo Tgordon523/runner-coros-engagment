@@ -21,12 +21,30 @@ def test_settings_roundtrip_rebuckets_effort():
 
     assert client.get("/api/settings").json() == {
         "annual_goal_mi": 0.0, "max_hr": 190, "privacy_zones": [],
+        "start_zone_enabled": False, "pace_zone_s_per_mi": [],
     }
     r = client.put("/api/settings", json={"annual_goal_mi": 1000, "max_hr": 180})
-    assert r.json() == {"annual_goal_mi": 1000.0, "max_hr": 180, "privacy_zones": []}
+    assert r.json() == {
+        "annual_goal_mi": 1000.0, "max_hr": 180, "privacy_zones": [],
+        "start_zone_enabled": False, "pace_zone_s_per_mi": [],
+    }
     # max HR change re-buckets through the API too
     assert client.get("/api/runs").json()[0]["effort"] == "hard"
     assert client.put("/api/settings", json={"max_hr": 999}).status_code == 422
+
+
+def test_pace_zone_settings_validation():
+    client, _ = make_client()
+    ok = client.put("/api/settings", json={"pace_zone_s_per_mi": [510, 570, 630]})
+    assert ok.json()["pace_zone_s_per_mi"] == [510, 570, 630]
+    # exactly three, strictly ascending, positive
+    assert client.put("/api/settings", json={"pace_zone_s_per_mi": [510, 570]}).status_code == 422
+    assert client.put("/api/settings", json={"pace_zone_s_per_mi": [630, 570, 510]}).status_code == 422
+    assert client.put("/api/settings", json={"pace_zone_s_per_mi": [510, 510, 630]}).status_code == 422
+    assert client.put("/api/settings", json={"pace_zone_s_per_mi": [-1, 570, 630]}).status_code == 422
+    # empty clears
+    cleared = client.put("/api/settings", json={"pace_zone_s_per_mi": []})
+    assert cleared.json()["pace_zone_s_per_mi"] == []
 
 
 def test_tracks_privacy_flag():
@@ -51,11 +69,30 @@ def test_tracks_privacy_flag():
     assert r.status_code == 422
 
 
+def test_tracks_start_zone_flag():
+    client, store = make_client()
+    from app.ingest.parser import TrackPoint
+
+    pts = [
+        TrackPoint(0.0, 41.88, -87.63, None, 140, 480.0),   # start
+        TrackPoint(60.0, 41.90, -87.63, None, 140, 480.0),  # ~2.2km out
+        TrackPoint(120.0, 41.881, -87.63, None, 140, 480.0),  # back near start
+    ]
+    store.add_run(make_run("a.fit"), pts)
+
+    # privacy on, start zone off: nothing trimmed (no saved zones)
+    assert len(client.get("/api/tracks?privacy=1").json()[0]["points"]) == 3
+    client.put("/api/settings", json={"start_zone_enabled": True})
+    assert len(client.get("/api/tracks?privacy=1").json()[0]["points"]) == 1
+    # local view still full
+    assert len(client.get("/api/tracks").json()[0]["points"]) == 3
+
+
 def test_dashboard_endpoint():
     client, store = make_client()
     store.add_run(make_run("a.fit", distance_mi=10), [])
     d = client.get("/api/dashboard").json()
-    assert set(d) == {"weekly", "pace_trend", "goal"}
+    assert set(d) == {"weekly", "daily", "pace_trend", "goal"}
     assert d["weekly"][0]["miles"] == 10
     assert d["goal"]["target_mi"] == 0
 

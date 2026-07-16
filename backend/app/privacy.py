@@ -1,11 +1,12 @@
-"""Privacy Zone trim, purely: tracks in, tracks out. See CONTEXT.md —
-applied to exports only; local views always get full tracks."""
+"""Privacy Zone and Start Zone trims, purely: tracks in, tracks out. See
+CONTEXT.md — applied to exports only; local views always get full tracks."""
 
 import math
 
 from .trackpoint import LAT, LON
 
 EARTH_R_M = 6_371_000.0
+START_ZONE_RADIUS_M = 400.0
 
 
 def _dist_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -37,4 +38,22 @@ def apply_privacy_zones(tracks: list[dict], zones: list[dict]) -> list[dict]:
         ]
         if kept:
             out.append({**track, "points": kept})
+    return out
+
+
+def apply_start_zones(
+    tracks: list[dict], radius_m: float = START_ZONE_RADIUS_M
+) -> list[dict]:
+    """Start Zone (CONTEXT.md): per run, drop points within radius_m of that
+    run's first point — including a finish that returns near the start. Each
+    run is trimmed only by its own zone; runs fully inside theirs disappear.
+    """
+    out = []
+    for track in tracks:
+        if not track["points"]:
+            out.append(track)
+            continue
+        first = track["points"][0]
+        zone = {"lat": first[LAT], "lon": first[LON], "radius_m": radius_m}
+        out.extend(apply_privacy_zones([track], [zone]))
     return out

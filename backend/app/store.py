@@ -9,8 +9,8 @@ from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
 from . import effort
-from .config import LOCAL_TZ, MAX_HR
-from .dashboard import pace_trend, weekly_mileage
+from .config import LOCAL_TZ, MAX_HR, MIN_RUN_MI
+from .dashboard import daily_mileage, pace_trend, weekly_mileage
 from .db import SCHEMA
 from .filters import RunFilter
 from .goal import goal_status
@@ -54,6 +54,24 @@ class Store:
         with self._lock:
             row = self._conn.execute(
                 "SELECT value FROM settings WHERE key = 'privacy_zones'"
+            ).fetchone()
+        return json.loads(row["value"]) if row else []
+
+    def start_zone_enabled(self) -> bool:
+        """Whether exports trim a Start Zone around each run's start."""
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM settings WHERE key = 'start_zone_enabled'"
+            ).fetchone()
+        return row["value"] == "1" if row else False
+
+    def pace_zone_s_per_mi(self) -> list[float]:
+        """Ascending Pace Zone threshold paces; [] until the user sets them."""
+        import json
+
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT value FROM settings WHERE key = 'pace_zone_s_per_mi'"
             ).fetchone()
         return json.loads(row["value"]) if row else []
 
@@ -199,27 +217,32 @@ class Store:
         with self._lock:
             ytd = self._conn.execute(
                 "SELECT COALESCE(SUM(distance_mi), 0) FROM runs "
-                "WHERE local_date >= ?",
-                (date(today.year, 1, 1).isoformat(),),
+                "WHERE local_date >= ? AND distance_mi >= ?",
+                (date(today.year, 1, 1).isoformat(), MIN_RUN_MI),
             ).fetchone()[0]
         return {
             "weekly": weekly_mileage(rows),
+            "daily": daily_mileage(rows),
             "pace_trend": pace_trend(rows),
             "goal": goal_status(self.annual_goal_mi(), ytd, today),
         }
 
     def meta(self) -> dict:
-        """What the filter panel needs to render its options."""
+        """What the filter panel needs for its options, plus the zone config
+        the map needs to color Track Points (Effort and Pace Zones)."""
         with self._lock:
             sports = [
                 r["sport"]
                 for r in self._conn.execute(
-                    "SELECT DISTINCT sport FROM runs ORDER BY sport"
+                    "SELECT DISTINCT sport FROM runs WHERE distance_mi >= ? "
+                    "ORDER BY sport",
+                    (MIN_RUN_MI,),
                 ).fetchall()
             ]
             row = self._conn.execute(
                 "SELECT MIN(local_date) AS first, MAX(local_date) AS last, "
-                "COUNT(*) AS count FROM runs"
+                "COUNT(*) AS count FROM runs WHERE distance_mi >= ?",
+                (MIN_RUN_MI,),
             ).fetchone()
         return {
             "sports": sports,
@@ -227,6 +250,9 @@ class Store:
             "first_date": row["first"],
             "last_date": row["last"],
             "run_count": row["count"],
+            "max_hr": self.max_hr(),
+            "effort_bounds_pct": effort.BOUNDS_PCT,
+            "pace_zone_s_per_mi": self.pace_zone_s_per_mi(),
         }
 
     # -- sync log -----------------------------------------------------------

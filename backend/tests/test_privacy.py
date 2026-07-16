@@ -1,4 +1,4 @@
-from app.privacy import apply_privacy_zones
+from app.privacy import apply_privacy_zones, apply_start_zones
 
 # ~111m per 0.001 deg lat at this latitude
 HOME = {"lat": 41.88, "lon": -87.63, "radius_m": 200}
@@ -39,3 +39,30 @@ def test_multiple_zones():
     tracks = [_track([_pt(41.88, -87.63), _pt(41.89, -87.63), _pt(41.885, -87.63)])]
     out = apply_privacy_zones(tracks, [HOME, z2])
     assert len(out[0]["points"]) == 1  # only the midpoint survives
+
+
+def test_start_zone_trims_out_and_back():
+    # out-and-back: start, ~2.2km out, finish ~110m from the start
+    tracks = [_track([
+        _pt(41.88, -87.63),    # start -> trimmed
+        _pt(41.90, -87.63),    # far -> kept
+        _pt(41.881, -87.63),   # finish inside the 400m start zone -> trimmed
+    ])]
+    out = apply_start_zones(tracks)
+    assert [p[1] for p in out[0]["points"]] == [41.90]
+
+
+def test_start_zones_are_per_run():
+    # run 2 passes through run 1's start area but keeps those points
+    run1 = _track([_pt(41.88, -87.63), _pt(41.90, -87.63)])
+    run2 = {**_track([_pt(41.95, -87.63), _pt(41.88, -87.63)]), "run_id": 2}
+    out = apply_start_zones([run1, run2])
+    assert [p[1] for p in out[0]["points"]] == [41.90]
+    assert [p[1] for p in out[1]["points"]] == [41.88]  # far from ITS OWN start
+
+
+def test_start_zone_swallows_short_loop_and_keeps_pointless_tracks():
+    tiny = _track([_pt(41.88, -87.63), _pt(41.8805, -87.63)])  # all within 400m
+    empty = {**_track([]), "run_id": 3}
+    out = apply_start_zones([tiny, empty])
+    assert out == [empty]
