@@ -49,6 +49,7 @@ export default function App() {
     () => ({
       maxHr: meta?.max_hr ?? 190,
       effortBoundsPct: meta?.effort_bounds_pct ?? [0.7, 0.8, 0.9],
+      effortNames: meta?.efforts ?? [],
       paceBoundsSPerMi: meta?.pace_zone_s_per_mi ?? [],
     }),
     [meta]

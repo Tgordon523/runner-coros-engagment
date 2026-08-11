@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
-import { apiGet } from "./api";
+import { apiGet, apiPut } from "./api";
 import type { Settings } from "./types";
 import { fmtPace } from "./zones";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 interface Props {
   onSaved: () => void;
@@ -21,19 +19,19 @@ export function parseZones(text: string) {
     .filter((z) => !Number.isNaN(z.lat) && !Number.isNaN(z.lon) && z.radius_m > 0);
 }
 
-/** "8:30, 9:30, 10:30" (mm:ss or plain seconds) -> ascending s/mi, [] if unusable. */
+/** "8:30, 9:30, 10:30" (mm:ss or plain seconds) -> ascending s/mi.
+ * Parsing only: the backend is the single validator of the Pace Zone
+ * invariant (exactly 3, positive, strictly ascending) and 422s bad sets. */
 export function parsePaceThresholds(text: string): number[] {
-  const secs = text
+  return text
     .split(",")
     .map((v) => v.trim())
     .filter(Boolean)
     .map((v) => {
       const m = /^(\d+):([0-5]\d)$/.exec(v);
       return m ? Number(m[1]) * 60 + Number(m[2]) : Number(v);
-    });
-  if (secs.length !== 3 || secs.some((s) => !Number.isFinite(s) || s <= 0)) return [];
-  const sorted = [...secs].sort((a, b) => a - b);
-  return new Set(sorted).size === 3 ? sorted : [];
+    })
+    .sort((a, b) => a - b);
 }
 
 export default function SettingsPanel({ onSaved }: Props) {
@@ -43,6 +41,7 @@ export default function SettingsPanel({ onSaved }: Props) {
   const [startZone, setStartZone] = useState(false);
   const [paceZones, setPaceZones] = useState("");
   const [saved, setSaved] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     apiGet<Settings>("/api/settings").then((s) => {
@@ -63,21 +62,19 @@ export default function SettingsPanel({ onSaved }: Props) {
     };
     if (goal !== "") body.annual_goal_mi = Number(goal);
     if (maxHr !== "") body.max_hr = Number(maxHr);
-    if (paceZones.trim() === "") body.pace_zone_s_per_mi = [];
-    else {
-      const thresholds = parsePaceThresholds(paceZones);
-      if (thresholds.length) body.pace_zone_s_per_mi = thresholds;
+    // always send what was typed: the backend owns the Pace Zone invariant
+    body.pace_zone_s_per_mi =
+      paceZones.trim() === "" ? [] : parsePaceThresholds(paceZones);
+    try {
+      await apiPut("/api/settings", body);
+    } catch (e) {
+      setError(`Save failed (${e instanceof Error ? e.message : e}) — check pace zones`);
+      return;
     }
-    const res = await fetch(`${API_URL}/api/settings`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      setSaved(true);
-      setTimeout(() => setSaved(false), 1500);
-      onSaved();
-    }
+    setError(null);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+    onSaved();
   };
 
   return (
@@ -142,6 +139,11 @@ export default function SettingsPanel({ onSaved }: Props) {
       <button className="sync-btn" onClick={save}>
         {saved ? "Saved ✓" : "Save"}
       </button>
+      {error && (
+        <p className="dim" style={{ color: "#f87171" }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }

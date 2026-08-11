@@ -81,6 +81,16 @@ def test_tracks_decimation_budget(store):
 def test_meta(store):
     assert store.meta() == {
         "sports": [], "efforts": ["easy", "moderate", "hard", "max"],
+        "times_of_day": ["morning", "lunch", "evening", "night"],
+        "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+        "periods": [
+            {"value": "all", "label": "All time"},
+            {"value": "7d", "label": "Last 7 days"},
+            {"value": "30d", "label": "Last 30 days"},
+            {"value": "90d", "label": "Last 90 days"},
+            {"value": "ytd", "label": "Year to date"},
+        ],
+        "track_point_columns": ["lon", "lat", "t_offset_s", "hr", "pace_s_per_mi"],
         "first_date": None, "last_date": None, "run_count": 0,
         "max_hr": 190, "effort_bounds_pct": [0.70, 0.80, 0.90],
         "pace_zone_s_per_mi": [],

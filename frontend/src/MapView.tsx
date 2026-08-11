@@ -6,12 +6,10 @@ import { ZONE_COLORS, bounds, buildLayers } from "./layers";
 import type { CaptureSurface } from "./recording";
 import type { Timeline } from "./timeline";
 import type { GradientMetric, LayerMode, Track } from "./types";
-import { zoneRanges, type ZoneConfig } from "./zones";
+import { zoneLabels, zoneRanges, type ZoneConfig } from "./zones";
 
 const DARK_STYLE =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
-
-const ZONE_LABELS = ["Easy", "Moderate", "Hard", "Max"]; // mirrors effort.NAMES
 
 function ZoneLegend({ metric, zones }: { metric: GradientMetric; zones: ZoneConfig }) {
   const ranges = zoneRanges(metric, zones);
@@ -21,7 +19,7 @@ function ZoneLegend({ metric, zones }: { metric: GradientMetric; zones: ZoneConf
         {metric === "hr" ? "Effort (bpm)" : "Pace (min/mi)"}
       </span>
       {ranges ? (
-        ZONE_LABELS.map((label, i) => (
+        zoneLabels(zones).map((label, i) => (
           <span key={label} className="legend-row">
             <i style={{ background: `rgb(${ZONE_COLORS[i].join(",")})` }} />
             {label} · {ranges[i]}

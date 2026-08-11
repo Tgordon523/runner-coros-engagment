@@ -1,9 +1,6 @@
 import type { Meta } from "./types";
 import type { Filters } from "./useFilters";
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const TIMES = ["morning", "lunch", "evening", "night"];
-
 function toggle<T>(list: T[], v: T): T[] {
   return list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
 }
@@ -17,6 +14,8 @@ interface Props {
 export default function FilterPanel({ filters, onChange, meta }: Props) {
   const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch });
 
+  // every facet vocabulary comes from meta — nothing is hardcoded here
+  const periods = meta?.periods ?? [{ value: "all", label: "All time" }];
   const years: string[] = [];
   if (meta?.first_date && meta.last_date) {
     const first = Number(meta.first_date.slice(0, 4));
@@ -32,11 +31,11 @@ export default function FilterPanel({ filters, onChange, meta }: Props) {
           value={filters.period}
           onChange={(e) => set({ period: e.target.value })}
         >
-          <option value="all">All time</option>
-          <option value="7d">Last 7 days</option>
-          <option value="30d">Last 30 days</option>
-          <option value="90d">Last 90 days</option>
-          <option value="ytd">Year to date</option>
+          {periods.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
           {years.map((y) => (
             <option key={y} value={`year-${y}`}>
               {y}
@@ -48,7 +47,7 @@ export default function FilterPanel({ filters, onChange, meta }: Props) {
       <div className="field">
         <span>Day</span>
         <div className="chips">
-          {DAYS.map((d, i) => (
+          {(meta?.days ?? []).map((d, i) => (
             <button
               key={d}
               className={filters.days.includes(i) ? "chip on" : "chip"}
@@ -78,7 +77,7 @@ export default function FilterPanel({ filters, onChange, meta }: Props) {
       <div className="field">
         <span>Time of day</span>
         <div className="chips">
-          {TIMES.map((t) => (
+          {(meta?.times_of_day ?? []).map((t) => (
             <button
               key={t}
               className={filters.times.includes(t) ? "chip on" : "chip"}

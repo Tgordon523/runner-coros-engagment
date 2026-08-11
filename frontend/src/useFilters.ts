@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet } from "./api";
+import { assertWireColumns } from "./trackpoint";
 import type { Dashboard, Meta, Track } from "./types";
 
 export interface Filters {
@@ -89,7 +90,15 @@ export function useDashboard(filters: Filters, refreshKey = 0): Dashboard | null
 export function useMeta(refreshKey = 0): Meta | null {
   const [meta, setMeta] = useState<Meta | null>(null);
   useEffect(() => {
-    apiGet<Meta>("/api/meta").then(setMeta).catch(() => setMeta(null));
+    apiGet<Meta>("/api/meta")
+      .then((m) => {
+        assertWireColumns(m.track_point_columns);
+        setMeta(m);
+      })
+      .catch((e) => {
+        console.error(e);
+        setMeta(null);
+      });
   }, [refreshKey]);
   return meta;
 }

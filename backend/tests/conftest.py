@@ -1,7 +1,10 @@
+from pathlib import Path
+
 import pytest
 
 from app.ingest.derive import RunRow
 from app.store import Store
+from synthfit import write_synthetic_fit
 
 
 # avg_hr values that land in each Effort bucket at max HR 190
@@ -34,3 +37,14 @@ def make_run(
 @pytest.fixture
 def store() -> Store:
     return Store(":memory:")
+
+
+@pytest.fixture(scope="session")
+def fit_file(tmp_path_factory) -> Path:
+    """A FIT file for parser tests. A real export dropped at
+    tests/fixtures/sample.fit wins (never committed — *.fit is gitignored);
+    otherwise a synthetic activity is generated, so the tests always run."""
+    real = Path(__file__).parent / "fixtures" / "sample.fit"
+    if real.exists():
+        return real
+    return write_synthetic_fit(tmp_path_factory.mktemp("fit") / "sample.fit")

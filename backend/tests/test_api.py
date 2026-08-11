@@ -116,6 +116,38 @@ def test_runs_endpoint_validation():
     assert client.get("/api/runs?day=9").status_code == 422
 
 
+def test_meta_serves_the_vocabulary():
+    """Every facet the panels render comes from meta — and every served
+    value must be accepted back as a filter."""
+    client, _ = make_client()
+    m = client.get("/api/meta").json()
+    assert m["times_of_day"] == ["morning", "lunch", "evening", "night"]
+    assert m["days"] == ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    assert [p["value"] for p in m["periods"]] == ["all", "7d", "30d", "90d", "ytd"]
+    assert m["efforts"] == ["easy", "moderate", "hard", "max"]
+
+    times = ",".join(m["times_of_day"])
+    assert client.get(f"/api/runs?time_of_day={times}").status_code == 200
+    efforts = ",".join(m["efforts"])
+    assert client.get(f"/api/runs?effort={efforts}").status_code == 200
+    for p in m["periods"]:
+        assert client.get(f"/api/runs?period={p['value']}").status_code == 200
+
+
+def test_track_point_wire_contract():
+    """Pins the positional tuple order — frontend/src/trackpoint.ts must
+    agree (its accessors are tested against the same order)."""
+    client, store = make_client()
+    from app.ingest.parser import TrackPoint
+
+    store.add_run(make_run("a.fit"), [TrackPoint(5.0, 41.9, -87.6, 180.0, 140, 480.0)])
+    assert client.get("/api/meta").json()["track_point_columns"] == [
+        "lon", "lat", "t_offset_s", "hr", "pace_s_per_mi"
+    ]
+    point = client.get("/api/tracks").json()[0]["points"][0]
+    assert point == [-87.6, 41.9, 5.0, 140, 480.0]
+
+
 def test_track_endpoints():
     client, store = make_client()
     from app.ingest.parser import TrackPoint
