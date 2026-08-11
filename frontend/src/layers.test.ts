@@ -7,6 +7,7 @@ import type { ZoneConfig } from "./zones";
 const ZONES: ZoneConfig = {
   maxHr: 190,
   effortBoundsPct: [0.7, 0.8, 0.9],
+  effortNames: ["easy", "moderate", "hard", "max"],
   paceBoundsSPerMi: [510, 570, 630],
 };
 

@@ -7,6 +7,20 @@
 
 export type TrackPoint = [number, number, number, number | null, number | null];
 
+/** Mirror of backend WIRE_COLUMNS; the accessors below follow this order
+ * (trackpoint.test.ts pins that) and assertWireColumns checks it against
+ * what the backend actually serves. */
+export const WIRE_COLUMNS = ["lon", "lat", "t_offset_s", "hr", "pace_s_per_mi"] as const;
+
+/** Call with meta.track_point_columns: fails loud if the wire order drifts,
+ * instead of silently mis-coloring every Track Point. */
+export function assertWireColumns(served: string[]): void {
+  if (served.join() !== WIRE_COLUMNS.join())
+    throw new Error(
+      `Track Point wire mismatch: backend serves [${served}], frontend expects [${WIRE_COLUMNS}]`
+    );
+}
+
 export const lon = (p: TrackPoint): number => p[0];
 export const lat = (p: TrackPoint): number => p[1];
 export const tOffsetS = (p: TrackPoint): number => p[2];

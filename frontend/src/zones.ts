@@ -15,6 +15,7 @@ export { fmtPace };
 export interface ZoneConfig {
   maxHr: number;
   effortBoundsPct: number[]; // ascending fractions of max HR
+  effortNames: string[]; // meta.efforts — legend labels derive from these
   paceBoundsSPerMi: number[]; // ascending s/mi thresholds; [] = unconfigured
 }
 
@@ -44,6 +45,12 @@ export function pointZone(
   }
   const v = paceSPerMi(p);
   return v == null ? null : paceZone(v, cfg);
+}
+
+/** Legend display labels per zone index (easy→max), from the Effort names
+ * meta serves — both metrics share the four-zone vocabulary. */
+export function zoneLabels(cfg: ZoneConfig): string[] {
+  return cfg.effortNames.map((n) => n.charAt(0).toUpperCase() + n.slice(1));
 }
 
 /** Legend range text per zone (easy→max), or null when pace is unconfigured. */

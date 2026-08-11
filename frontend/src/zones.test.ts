@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { parsePaceThresholds } from "./SettingsPanel";
-import { fmtPace, hrZone, paceZone, zoneRanges, type ZoneConfig } from "./zones";
+import { fmtPace, hrZone, paceZone, zoneLabels, zoneRanges, type ZoneConfig } from "./zones";
 
 const CFG: ZoneConfig = {
   maxHr: 190,
   effortBoundsPct: [0.7, 0.8, 0.9],
+  effortNames: ["easy", "moderate", "hard", "max"],
   paceBoundsSPerMi: [510, 570, 630],
 };
 
@@ -48,18 +49,24 @@ describe("zoneRanges — legend text", () => {
   });
 });
 
-describe("parsePaceThresholds — settings input -> ascending s/mi", () => {
+describe("parsePaceThresholds — parsing only; the backend validates", () => {
   it("parses mm:ss and plain seconds, sorts ascending", () => {
     expect(parsePaceThresholds("8:30, 9:30, 10:30")).toEqual([510, 570, 630]);
     expect(parsePaceThresholds("630, 8:30, 570")).toEqual([510, 570, 630]);
+    expect(parsePaceThresholds("")).toEqual([]);
   });
 
-  it("rejects wrong counts, junk, and duplicates", () => {
-    expect(parsePaceThresholds("")).toEqual([]);
-    expect(parsePaceThresholds("8:30, 9:30")).toEqual([]);
-    expect(parsePaceThresholds("8:30, banana, 10:30")).toEqual([]);
-    expect(parsePaceThresholds("8:30, 8:30, 10:30")).toEqual([]);
-    expect(parsePaceThresholds("0, 570, 630")).toEqual([]);
+  it("passes bad sets through for the backend 422 to reject", () => {
+    // wrong count, duplicates, non-positive: settings.py owns the invariant
+    expect(parsePaceThresholds("8:30, 9:30")).toEqual([510, 570]);
+    expect(parsePaceThresholds("8:30, 8:30, 10:30")).toEqual([510, 510, 630]);
+    expect(parsePaceThresholds("0, 570, 630")).toEqual([0, 570, 630]);
+  });
+});
+
+describe("zoneLabels — legend labels from meta's Effort names", () => {
+  it("capitalizes the served names", () => {
+    expect(zoneLabels(CFG)).toEqual(["Easy", "Moderate", "Hard", "Max"]);
   });
 });
 
