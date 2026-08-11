@@ -18,6 +18,8 @@ services:
       - "5173:5173"
     volumes:
       - ./frontend/src:/app/src
+      # index.html holds all the app's CSS: without this it only updates on rebuild
+      - ./frontend/index.html:/app/index.html
     environment:
       - VITE_API_URL=http://localhost:8000
     depends_on:

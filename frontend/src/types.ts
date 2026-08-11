@@ -13,6 +13,10 @@ export interface Track {
 export interface Meta {
   sports: string[];
   efforts: string[];
+  times_of_day: string[];
+  days: string[];
+  periods: { value: string; label: string }[];
+  track_point_columns: string[];
   first_date: string | null;
   last_date: string | null;
   run_count: number;
@@ -22,10 +26,13 @@ export interface Meta {
 }
 
 export interface SyncStatus {
+  /** "ok" | "partial" | "error" | "running" | "already-running" | "never-run" */
   status: string;
   finished_at?: string | null;
   new_runs?: number;
   error?: string | null;
+  /** When a sync last actually reached COROS, i.e. how stale the runs are. */
+  last_ok_at?: string | null;
 }
 
 export type LayerMode = "heatmap" | "gradient" | "timelapse";
