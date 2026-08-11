@@ -3,14 +3,15 @@ from datetime import date
 import pytest
 from fastapi import HTTPException
 
-from app.config import MIN_RUN_MI
 from app.filters import RunFilter, resolve_period, run_filter
 
 
-def test_empty_filter_still_applies_run_floor():
+def test_empty_filter_matches_all_runs():
+    # The Run floor is not RunFilter's job: the Store's RUNS base select
+    # applies it before any row reaches this clause.
     where, params = RunFilter().where()
-    assert where == "distance_mi >= ?"
-    assert params == [MIN_RUN_MI]
+    assert where == "1=1"
+    assert params == []
 
 
 def test_where_combines_all_conditions():
@@ -25,10 +26,10 @@ def test_where_combines_all_conditions():
         max_mi=10,
     )
     where, params = f.where()
-    assert where.count(" AND ") == 8
+    assert where.count(" AND ") == 7
     assert "day_of_week IN (?,?)" in where
     assert params == [
-        MIN_RUN_MI, "2026-01-01", "2026-06-30", 5, 6, "easy", "moderate",
+        "2026-01-01", "2026-06-30", 5, 6, "easy", "moderate",
         "morning", "running", 3, 10,
     ]
 

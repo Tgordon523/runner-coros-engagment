@@ -11,12 +11,24 @@ from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, Query
 
-from .config import LOCAL_TZ, MIN_RUN_MI
+from .config import LOCAL_TZ
 from .effort import NAMES as EFFORT_NAMES
+from .ingest.derive import TIME_OF_DAY_NAMES
 
 PRESET_DAYS = {"7d": 7, "30d": 30, "90d": 90}
+# Period selector entries served by /api/meta; every value is one
+# resolve_period understands (year-YYYY options come from meta's date range).
+PERIOD_PRESETS = [
+    ("all", "All time"),
+    ("7d", "Last 7 days"),
+    ("30d", "Last 30 days"),
+    ("90d", "Last 90 days"),
+    ("ytd", "Year to date"),
+]
+# index = day_of_week (0=Monday), the convention derive.summarize writes
+DAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 EFFORTS = set(EFFORT_NAMES)
-TIMES_OF_DAY = {"morning", "lunch", "evening", "night"}
+TIMES_OF_DAY = set(TIME_OF_DAY_NAMES)
 
 
 def _local_today() -> date:
@@ -43,10 +55,10 @@ class RunFilter:
     def where(self) -> tuple[str, list]:
         """Build the WHERE clause (without the keyword) and its parameters.
 
-        Always starts with the Run floor: activities under MIN_RUN_MI are
-        not Runs and match no query, beneath any user-set min_mi.
+        Sees Runs only: the Store's RUNS base select applies the MIN_RUN_MI
+        floor before any row reaches this clause, beneath any user-set min_mi.
         """
-        conds, params = ["distance_mi >= ?"], [MIN_RUN_MI]
+        conds, params = [], []
         if self.start:
             conds.append("local_date >= ?")
             params.append(self.start.isoformat())
@@ -68,7 +80,7 @@ class RunFilter:
         if self.max_mi is not None:
             conds.append("distance_mi <= ?")
             params.append(self.max_mi)
-        return (" AND ".join(conds), params)
+        return (" AND ".join(conds) or "1=1", params)
 
 
 def resolve_period(

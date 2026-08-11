@@ -20,6 +20,11 @@ TIME_OF_DAY_BUCKETS = [
     ("evening", 14, 21),
 ]
 
+# Ordered facet vocabulary: bucket names plus the catch-all. The filter's
+# valid set and the /api/meta payload both derive from this — the frontend
+# never hardcodes it.
+TIME_OF_DAY_NAMES = [name for name, _, _ in TIME_OF_DAY_BUCKETS] + ["night"]
+
 
 @dataclass
 class RunRow:

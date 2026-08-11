@@ -12,22 +12,27 @@ from . import effort
 from .config import LOCAL_TZ, MAX_HR, MIN_RUN_MI
 from .dashboard import daily_mileage, pace_trend, weekly_mileage
 from .db import SCHEMA
-from .filters import RunFilter
+from .filters import DAY_NAMES, PERIOD_PRESETS, RunFilter
 from .goal import goal_status
-from .ingest.derive import RunRow
+from .ingest.derive import TIME_OF_DAY_NAMES, RunRow
 from .ingest.parser import TrackPoint
-from .trackpoint import WIRE_SELECT
+from .trackpoint import WIRE_COLUMNS, WIRE_SELECT
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-# Inner select: the runs table plus computed effort. Filters (including the
-# Effort filter) run against this in an outer query, so RunFilter stays
-# ignorant of how effort is derived.
+# The Run floor (CONTEXT.md "Run"): activities under MIN_RUN_MI are stored
+# but are not Runs. Every read selects FROM this instead of the raw table,
+# so no query can forget the cutoff. Applied at read time, never at ingest.
+RUNS = f"(SELECT * FROM runs WHERE distance_mi >= {MIN_RUN_MI})"
+
+# Inner select: Runs plus computed effort. Filters (including the Effort
+# filter) run against this in an outer query, so RunFilter stays ignorant
+# of how effort is derived.
 _CASE_SQL, _CASE_PARAMS = effort.case_sql()
-RUNS_WITH_EFFORT = f"SELECT *, {_CASE_SQL} AS effort FROM runs"
+RUNS_WITH_EFFORT = f"SELECT *, {_CASE_SQL} AS effort FROM {RUNS}"
 
 
 class Store:
@@ -216,9 +221,9 @@ class Store:
         rows = self.runs(f)
         with self._lock:
             ytd = self._conn.execute(
-                "SELECT COALESCE(SUM(distance_mi), 0) FROM runs "
-                "WHERE local_date >= ? AND distance_mi >= ?",
-                (date(today.year, 1, 1).isoformat(), MIN_RUN_MI),
+                f"SELECT COALESCE(SUM(distance_mi), 0) FROM {RUNS} "
+                "WHERE local_date >= ?",
+                (date(today.year, 1, 1).isoformat(),),
             ).fetchone()[0]
         return {
             "weekly": weekly_mileage(rows),
@@ -228,25 +233,28 @@ class Store:
         }
 
     def meta(self) -> dict:
-        """What the filter panel needs for its options, plus the zone config
-        the map needs to color Track Points (Effort and Pace Zones)."""
+        """Everything the frontend must agree with the backend about: the
+        facet vocabularies (so panels and legends render what they're given,
+        never hardcoded copies), the zone config the map needs to color
+        Track Points, and the Track Point wire layout."""
         with self._lock:
             sports = [
                 r["sport"]
                 for r in self._conn.execute(
-                    "SELECT DISTINCT sport FROM runs WHERE distance_mi >= ? "
-                    "ORDER BY sport",
-                    (MIN_RUN_MI,),
+                    f"SELECT DISTINCT sport FROM {RUNS} ORDER BY sport"
                 ).fetchall()
             ]
             row = self._conn.execute(
-                "SELECT MIN(local_date) AS first, MAX(local_date) AS last, "
-                "COUNT(*) AS count FROM runs WHERE distance_mi >= ?",
-                (MIN_RUN_MI,),
+                f"SELECT MIN(local_date) AS first, MAX(local_date) AS last, "
+                f"COUNT(*) AS count FROM {RUNS}"
             ).fetchone()
         return {
             "sports": sports,
             "efforts": effort.NAMES,
+            "times_of_day": TIME_OF_DAY_NAMES,
+            "days": list(DAY_NAMES),
+            "periods": [{"value": v, "label": l} for v, l in PERIOD_PRESETS],
+            "track_point_columns": list(WIRE_COLUMNS),
             "first_date": row["first"],
             "last_date": row["last"],
             "run_count": row["count"],
@@ -281,3 +289,16 @@ class Store:
                 "SELECT * FROM sync_log ORDER BY id DESC LIMIT 1"
             ).fetchone()
         return dict(row) if row else None
+
+    def last_ok_sync_at(self) -> str | None:
+        """When a sync last actually reached COROS — how stale the runs are.
+
+        Only status 'ok' counts: a 'partial' sync ingested local files but never
+        talked to the watch's data.
+        """
+        with self._lock:
+            row = self._conn.execute(
+                """SELECT finished_at FROM sync_log WHERE status = 'ok'
+                   ORDER BY id DESC LIMIT 1"""
+            ).fetchone()
+        return row["finished_at"] if row else None
