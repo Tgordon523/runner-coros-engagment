@@ -7,7 +7,7 @@
  * CaptureSurface instead of being crawled for them.
  */
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+import { apiUpload } from "./api";
 
 export type RecorderState = "idle" | "recording" | "converting";
 
@@ -59,12 +59,7 @@ export function startRecording(
     try {
       const form = new FormData();
       form.append("video", webm, "timelapse.webm");
-      const res = await fetch(`${API_URL}/api/export/mp4`, {
-        method: "POST",
-        body: form,
-      });
-      if (!res.ok) throw new Error(String(res.status));
-      download(await res.blob(), "timelapse.mp4");
+      download(await apiUpload("/api/export/mp4", form), "timelapse.mp4");
     } catch {
       download(webm, "timelapse.webm"); // transcode failed; WebM still art
     } finally {
