@@ -1,24 +1,20 @@
-"""Parser test against a real FIT fixture.
+"""Parser tests against a FIT fixture.
 
-Drop any real COROS FIT file at backend/tests/fixtures/sample.fit to enable.
-(Real FIT files are personal data, so none is committed; test skips without one.)
+The fit_file fixture defaults to a synthetic activity (synthfit.py); drop a
+real COROS export at backend/tests/fixtures/sample.fit to test against that
+instead. The generic tests hold for either; the exact-value test always
+decodes the synthetic file.
 """
-
-from pathlib import Path
 
 import pytest
 
 from app.ingest.derive import summarize
 from app.ingest.parser import parse_fit
-from app.store import Store
-
-FIXTURE = Path(__file__).parent / "fixtures" / "sample.fit"
-
-pytestmark = pytest.mark.skipif(not FIXTURE.exists(), reason="no FIT fixture present")
+from synthfit import AVG_HR, INTERVAL_S, N_POINTS, SPEED_M_S, write_synthetic_fit
 
 
-def test_parse_fit_basics():
-    run = parse_fit(FIXTURE)
+def test_parse_fit_basics(fit_file):
+    run = parse_fit(fit_file)
     assert run is not None
     assert run.distance_mi > 0
     assert run.duration_s > 0
@@ -28,9 +24,23 @@ def test_parse_fit_basics():
     assert run.points == sorted(run.points, key=lambda p: p.t_offset_s)
 
 
-def test_ingest_idempotent():
-    store = Store(":memory:")
-    parsed = parse_fit(FIXTURE)
-    row = summarize(parsed, FIXTURE.name)
+def test_ingest_idempotent(fit_file, store):
+    parsed = parse_fit(fit_file)
+    row = summarize(parsed, fit_file.name)
     assert store.add_run(row, parsed.points) is True
     assert store.add_run(row, parsed.points) is False
+
+
+def test_parse_fit_synthetic_values(tmp_path):
+    """Exact decode contract: what synthfit writes is what parse_fit reads."""
+    run = parse_fit(write_synthetic_fit(tmp_path / "sample.fit"))
+    assert run.sport == "running"
+    assert run.duration_s == N_POINTS * INTERVAL_S
+    assert run.distance_mi * 1609.344 == pytest.approx(SPEED_M_S * N_POINTS * INTERVAL_S)
+    assert run.avg_hr == AVG_HR
+    assert len(run.points) == N_POINTS
+    first, last = run.points[0], run.points[-1]
+    assert first.t_offset_s == 0.0
+    assert last.t_offset_s == (N_POINTS - 1) * INTERVAL_S
+    assert (first.lat, first.lon) == (0.0, 0.0)
+    assert first.pace_s_per_mi == 1609.344 / SPEED_M_S
