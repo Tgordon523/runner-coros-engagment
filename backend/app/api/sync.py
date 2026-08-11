@@ -15,4 +15,7 @@ async def trigger_sync(store: Store = Depends(get_store)) -> dict:
 
 @router.get("/status")
 def sync_status(store: Store = Depends(get_store)) -> dict:
-    return store.last_sync() or {"status": "never-run"}
+    last = store.last_sync()
+    if last is None:
+        return {"status": "never-run", "last_ok_at": None}
+    return {**last, "last_ok_at": store.last_ok_sync_at()}
