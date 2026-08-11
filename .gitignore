@@ -13,7 +13,11 @@ exports/
 *.kml
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
 *.sqlite*
+# a Training Hub bulk export lands here as a zip full of FIT files
+*.zip
 
 # Rendered art may contain location data
 *.mp4
@@ -29,11 +33,12 @@ __pycache__/
 node_modules/
 dist/
 *.local
+*.tsbuildinfo
 
 # Editors / OS
 .DS_Store
 .idea/
 .vscode/
 
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code local settings and skills
+.claude/
