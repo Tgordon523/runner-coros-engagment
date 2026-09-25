@@ -6,17 +6,15 @@ Adapters: file DB in prod, ":memory:" in tests.
 import sqlite3
 import threading
 from datetime import date, datetime, timezone
-from zoneinfo import ZoneInfo
 
 from . import effort
-from .config import LOCAL_TZ, MAX_HR, MIN_RUN_MI
-from .dashboard import daily_mileage, pace_trend, weekly_mileage
+from .config import MIN_RUN_MI
 from .db import SCHEMA
-from .filters import DAY_NAMES, PERIOD_PRESETS, RunFilter
-from .goal import goal_status
-from .ingest.derive import TIME_OF_DAY_NAMES, RunRow
+from .filters import RunFilter
+from .ingest.derive import RunRow
 from .ingest.parser import TrackPoint
-from .trackpoint import WIRE_COLUMNS, WIRE_SELECT
+from .settings import setting
+from .trackpoint import WIRE_SELECT
 
 
 def _now() -> str:
@@ -44,48 +42,15 @@ class Store:
         self._lock = threading.Lock()
 
     # -- settings -----------------------------------------------------------
+    # Raw key/value only: defaults, encoding and decoding belong to
+    # settings.SETTINGS, which is the one place a Settings value is declared.
 
-    def max_hr(self) -> int:
-        """Current max HR: the settings row wins, env/config default otherwise."""
+    def get_setting(self, key: str) -> str | None:
         with self._lock:
             row = self._conn.execute(
-                "SELECT value FROM settings WHERE key = 'max_hr'"
+                "SELECT value FROM settings WHERE key = ?", (key,)
             ).fetchone()
-        return int(row["value"]) if row else MAX_HR
-
-    def privacy_zones(self) -> list[dict]:
-        import json
-
-        with self._lock:
-            row = self._conn.execute(
-                "SELECT value FROM settings WHERE key = 'privacy_zones'"
-            ).fetchone()
-        return json.loads(row["value"]) if row else []
-
-    def start_zone_enabled(self) -> bool:
-        """Whether exports trim a Start Zone around each run's start."""
-        with self._lock:
-            row = self._conn.execute(
-                "SELECT value FROM settings WHERE key = 'start_zone_enabled'"
-            ).fetchone()
-        return row["value"] == "1" if row else False
-
-    def pace_zone_s_per_mi(self) -> list[float]:
-        """Ascending Pace Zone threshold paces; [] until the user sets them."""
-        import json
-
-        with self._lock:
-            row = self._conn.execute(
-                "SELECT value FROM settings WHERE key = 'pace_zone_s_per_mi'"
-            ).fetchone()
-        return json.loads(row["value"]) if row else []
-
-    def annual_goal_mi(self) -> float:
-        with self._lock:
-            row = self._conn.execute(
-                "SELECT value FROM settings WHERE key = 'annual_goal_mi'"
-            ).fetchone()
-        return float(row["value"]) if row else 0.0
+        return row["value"] if row else None
 
     def set_setting(self, key: str, value: str) -> None:
         with self._lock, self._conn:
@@ -96,7 +61,7 @@ class Store:
             )
 
     def _effort_params(self) -> list[int]:
-        return [self.max_hr()] * _CASE_PARAMS
+        return [setting(self, "max_hr")] * _CASE_PARAMS
 
     # -- runs ---------------------------------------------------------------
 
@@ -211,32 +176,16 @@ class Store:
                 )
         return out
 
-    def dashboard(self, f: RunFilter, today: date | None = None) -> dict:
-        """Everything the Dashboard renders, in one payload.
-
-        Weekly mileage and pace trend respect the filter; Goal status is
-        always the unfiltered current calendar year (see CONTEXT.md).
-        """
-        today = today or datetime.now(ZoneInfo(LOCAL_TZ)).date()
-        rows = self.runs(f)
+    def ytd_miles(self, year: int) -> float:
         with self._lock:
-            ytd = self._conn.execute(
+            row = self._conn.execute(
                 f"SELECT COALESCE(SUM(distance_mi), 0) FROM {RUNS} "
-                "WHERE local_date >= ?",
-                (date(today.year, 1, 1).isoformat(),),
-            ).fetchone()[0]
-        return {
-            "weekly": weekly_mileage(rows),
-            "daily": daily_mileage(rows),
-            "pace_trend": pace_trend(rows),
-            "goal": goal_status(self.annual_goal_mi(), ytd, today),
-        }
+                "WHERE local_date >= ? AND local_date <= ?",
+                (date(year, 1, 1).isoformat(), date(year, 12, 31).isoformat()),
+            ).fetchone()
+        return row[0]
 
-    def meta(self) -> dict:
-        """Everything the frontend must agree with the backend about: the
-        facet vocabularies (so panels and legends render what they're given,
-        never hardcoded copies), the zone config the map needs to color
-        Track Points, and the Track Point wire layout."""
+    def run_stats(self) -> dict:
         with self._lock:
             sports = [
                 r["sport"]
@@ -250,17 +199,9 @@ class Store:
             ).fetchone()
         return {
             "sports": sports,
-            "efforts": effort.NAMES,
-            "times_of_day": TIME_OF_DAY_NAMES,
-            "days": list(DAY_NAMES),
-            "periods": [{"value": v, "label": l} for v, l in PERIOD_PRESETS],
-            "track_point_columns": list(WIRE_COLUMNS),
             "first_date": row["first"],
             "last_date": row["last"],
             "run_count": row["count"],
-            "max_hr": self.max_hr(),
-            "effort_bounds_pct": effort.BOUNDS_PCT,
-            "pace_zone_s_per_mi": self.pace_zone_s_per_mi(),
         }
 
     # -- sync log -----------------------------------------------------------

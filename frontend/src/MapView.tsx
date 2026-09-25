@@ -38,7 +38,8 @@ interface Props {
   metric: GradientMetric;
   currentTime: number;
   timeline: Timeline;
-  zones: ZoneConfig;
+  /** null until /api/meta lands; nothing zone-colored renders before then. */
+  zones: ZoneConfig | null;
   /** Hands the recorder this map's pixels; called with null on unmount. */
   onCaptureSurface?: (s: CaptureSurface | null) => void;
 }
@@ -107,7 +108,7 @@ export default function MapView({
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
-      {mode === "gradient" && <ZoneLegend metric={metric} zones={zones} />}
+      {mode === "gradient" && zones && <ZoneLegend metric={metric} zones={zones} />}
     </div>
   );
 }

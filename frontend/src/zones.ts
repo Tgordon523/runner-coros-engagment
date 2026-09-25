@@ -8,7 +8,7 @@
 import { fmtPace } from "./charts/common";
 import type { TrackPoint } from "./trackpoint";
 import { hr, paceSPerMi } from "./trackpoint";
-import type { GradientMetric } from "./types";
+import type { GradientMetric, Meta } from "./types";
 
 export { fmtPace };
 
@@ -17,6 +17,23 @@ export interface ZoneConfig {
   effortBoundsPct: number[]; // ascending fractions of max HR
   effortNames: string[]; // meta.efforts — legend labels derive from these
   paceBoundsSPerMi: number[]; // ascending s/mi thresholds; [] = unconfigured
+}
+
+/** The zone config the map colors Track Points with, straight from /api/meta.
+ *
+ * null until meta arrives — deliberately no defaults: the Effort bucketing
+ * exists exactly once, in the backend (CONTEXT.md "Effort"), and a local
+ * fallback would be a second copy that silently mis-colors when it drifts.
+ * Consumers render nothing zone-colored while this is null.
+ */
+export function zoneConfig(meta: Meta | null): ZoneConfig | null {
+  if (!meta) return null;
+  return {
+    maxHr: meta.max_hr,
+    effortBoundsPct: meta.effort_bounds_pct,
+    effortNames: meta.efforts,
+    paceBoundsSPerMi: meta.pace_zone_s_per_mi,
+  };
 }
 
 export const ZONE_COUNT = 4;

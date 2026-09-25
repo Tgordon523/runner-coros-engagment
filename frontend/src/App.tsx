@@ -15,7 +15,7 @@ import {
   type Filters,
 } from "./useFilters";
 import { useTimelapse } from "./useTimelapse";
-import type { ZoneConfig } from "./zones";
+import { zoneConfig } from "./zones";
 
 const MODES: { id: LayerMode; label: string }[] = [
   { id: "heatmap", label: "Heatmap" },
@@ -45,15 +45,7 @@ export default function App() {
     [tracks, timelineMode]
   );
   // zone config rides on meta so saving Settings re-colors the map
-  const zones = useMemo<ZoneConfig>(
-    () => ({
-      maxHr: meta?.max_hr ?? 190,
-      effortBoundsPct: meta?.effort_bounds_pct ?? [0.7, 0.8, 0.9],
-      effortNames: meta?.efforts ?? [],
-      paceBoundsSPerMi: meta?.pace_zone_s_per_mi ?? [],
-    }),
-    [meta]
-  );
+  const zones = useMemo(() => zoneConfig(meta), [meta]);
   const duration = timeline.duration;
   const playback = useTimelapse(timeline, mode === "timelapse" && view === "map");
 

@@ -78,30 +78,24 @@ def test_tracks_decimation_budget(store):
         assert t["points"][-1][2] == 99.0  # last point survives decimation
 
 
-def test_meta(store):
-    assert store.meta() == {
-        "sports": [], "efforts": ["easy", "moderate", "hard", "max"],
-        "times_of_day": ["morning", "lunch", "evening", "night"],
-        "days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-        "periods": [
-            {"value": "all", "label": "All time"},
-            {"value": "7d", "label": "Last 7 days"},
-            {"value": "30d", "label": "Last 30 days"},
-            {"value": "90d", "label": "Last 90 days"},
-            {"value": "ytd", "label": "Year to date"},
-        ],
-        "track_point_columns": ["lon", "lat", "t_offset_s", "hr", "pace_s_per_mi"],
-        "first_date": None, "last_date": None, "run_count": 0,
-        "max_hr": 190, "effort_bounds_pct": [0.70, 0.80, 0.90],
-        "pace_zone_s_per_mi": [],
+def test_run_stats(store):
+    assert store.run_stats() == {
+        "sports": [], "first_date": None, "last_date": None, "run_count": 0,
     }
     store.add_run(make_run("a.fit", sport="running", local_date="2026-01-05"), [])
     store.add_run(make_run("b.fit", sport="running/trail", local_date="2026-06-15"), [])
-    m = store.meta()
-    assert m["sports"] == ["running", "running/trail"]
-    assert m["first_date"] == "2026-01-05"
-    assert m["last_date"] == "2026-06-15"
-    assert m["run_count"] == 2
+    stats = store.run_stats()
+    assert stats["sports"] == ["running", "running/trail"]
+    assert stats["first_date"] == "2026-01-05"
+    assert stats["last_date"] == "2026-06-15"
+    assert stats["run_count"] == 2
+
+
+def test_ytd_miles(store):
+    store.add_run(make_run("a.fit", local_date="2026-01-15", distance_mi=5), [])
+    store.add_run(make_run("b.fit", local_date="2026-06-15", distance_mi=10), [])
+    assert store.ytd_miles(2026) == 15.0
+    assert store.ytd_miles(2025) == 0.0
 
 
 def test_run_track_and_missing(store):
@@ -111,21 +105,26 @@ def test_run_track_and_missing(store):
     assert store.run_track(9999) is None
 
 
-def test_dashboard_split_filtering(store):
-    from app.filters import RunFilter
+def test_dashboard_split_filtering():
+    from datetime import date as d
 
-    store.add_run(make_run("a.fit", avg_hr=HR["easy"], local_date="2026-03-02", distance_mi=10), [])
-    store.add_run(make_run("b.fit", avg_hr=HR["hard"], local_date="2026-03-03", distance_mi=6), [])
+    from app.api.dashboard import assemble_dashboard
+    from app.store import Store
+
+    store = Store(":memory:")
+    today = d.today()
+    d1 = d(today.year, 3, 2).isoformat()
+    d2 = d(today.year, 3, 3).isoformat()
+    store.add_run(make_run("a.fit", avg_hr=HR["easy"], local_date=d1, distance_mi=10), [])
+    store.add_run(make_run("b.fit", avg_hr=HR["hard"], local_date=d2, distance_mi=6), [])
     store.set_setting("annual_goal_mi", "1000")
 
-    d = store.dashboard(RunFilter(efforts=["hard"]), today=date(2026, 7, 2))
-    # weekly + pace respect the filter…
-    assert sum(w["miles"] for w in d["weekly"]) == 6
-    assert len(d["pace_trend"]) == 1
-    # …Goal never does
-    assert d["goal"]["ytd_mi"] == 16
-    assert d["goal"]["target_mi"] == 1000
-    assert d["goal"]["on_track"] is False
+    dash = assemble_dashboard(store, RunFilter(efforts=["hard"]), today=today)
+    assert sum(w["miles"] for w in dash["weekly"]) == 6
+    assert len(dash["pace_trend"]) == 1
+    assert dash["goal"]["ytd_mi"] == 16
+    assert dash["goal"]["target_mi"] == 1000
+    assert dash["goal"]["on_track"] is False
 
 
 def test_sub_mile_activities_are_not_runs(store):
@@ -133,7 +132,6 @@ def test_sub_mile_activities_are_not_runs(store):
     store.add_run(make_run("short.fit", distance_mi=0.6, local_date="2026-01-02",
                            sport="walking"), [_pt(0), _pt(1)])
     store.add_run(make_run("real.fit", distance_mi=5.0, local_date="2026-03-02"), [])
-    store.set_setting("annual_goal_mi", "1000")
 
     assert [r["fit_filename"] for r in store.runs(RunFilter())] == ["real.fit"]
     assert ["real.fit"] == [
@@ -142,13 +140,11 @@ def test_sub_mile_activities_are_not_runs(store):
         for r in store.runs(RunFilter())
         if r["id"] == t["run_id"]
     ]
-    d = store.dashboard(RunFilter(), today=date(2026, 7, 2))
-    assert d["goal"]["ytd_mi"] == 5.0
-    m = store.meta()
-    assert m["run_count"] == 1
-    assert m["sports"] == ["running"]
-    assert m["first_date"] == "2026-03-02"
-    # still stored: re-ingest is not required to change the cutoff
+    assert store.ytd_miles(2026) == 5.0
+    stats = store.run_stats()
+    assert stats["run_count"] == 1
+    assert stats["sports"] == ["running"]
+    assert stats["first_date"] == "2026-03-02"
     assert store.has_run("short.fit")
 
 

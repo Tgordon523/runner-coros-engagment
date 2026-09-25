@@ -1,9 +1,8 @@
-import json
-
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field, field_validator
 
 from ..deps import get_store
+from ..settings import read_settings, write_settings
 from ..store import Store
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -34,40 +33,16 @@ class SettingsPatch(BaseModel):
         return v
 
 
-def _current(store: Store) -> dict:
-    return {
-        "annual_goal_mi": store.annual_goal_mi(),
-        "max_hr": store.max_hr(),
-        "privacy_zones": store.privacy_zones(),
-        "start_zone_enabled": store.start_zone_enabled(),
-        "pace_zone_s_per_mi": store.pace_zone_s_per_mi(),
-    }
-
-
 @router.get("")
 def get_settings(store: Store = Depends(get_store)) -> dict:
-    return _current(store)
+    return read_settings(store)
 
 
 @router.put("")
 def put_settings(
     patch: SettingsPatch, store: Store = Depends(get_store)
 ) -> dict:
-    if patch.annual_goal_mi is not None:
-        store.set_setting("annual_goal_mi", str(patch.annual_goal_mi))
-    if patch.max_hr is not None:
-        store.set_setting("max_hr", str(patch.max_hr))
-    if patch.privacy_zones is not None:
-        store.set_setting(
-            "privacy_zones",
-            json.dumps([z.model_dump() for z in patch.privacy_zones]),
-        )
-    if patch.start_zone_enabled is not None:
-        store.set_setting(
-            "start_zone_enabled", "1" if patch.start_zone_enabled else "0"
-        )
-    if patch.pace_zone_s_per_mi is not None:
-        store.set_setting(
-            "pace_zone_s_per_mi", json.dumps(patch.pace_zone_s_per_mi)
-        )
-    return _current(store)
+    """Validate here, encode in settings.SETTINGS. An omitted field is left
+    alone; an empty list clears (see the Pace Zone validator)."""
+    write_settings(store, patch.model_dump(exclude_none=True))
+    return read_settings(store)

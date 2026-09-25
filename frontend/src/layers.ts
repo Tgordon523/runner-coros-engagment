@@ -58,7 +58,7 @@ export function buildLayers(
   metric: GradientMetric,
   currentTime: number,
   timeline: Timeline,
-  zones: ZoneConfig
+  zones: ZoneConfig | null
 ): Layer[] {
   if (!tracks.length) return [];
 
@@ -78,6 +78,8 @@ export function buildLayers(
   }
 
   if (mode === "gradient") {
+    // zone colors come from meta; nothing to color until it lands
+    if (!zones) return [];
     return [
       new LineLayer<Segment>({
         id: "gradient",
