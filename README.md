@@ -85,7 +85,10 @@ tracks fetch:
   bucketed by your three Pace Zone thresholds, with an on-map legend.
 - **Timelapse** — playback with play/pause/scrub and 10–600× speed, in two timing modes:
   aligned-start (every run's t=0 together, trails branching outward) and chronological
-  (runs draw in date order, each starting as the previous finishes).
+  (runs draw in date order, each starting as the previous finishes). The clock state
+  machine lives in `timelapse.ts` (no React), so wrap-around and record-stop timing are
+  testable without a browser; `useTimelapse.ts` is a thin adapter that pumps
+  `requestAnimationFrame` into it.
 
 **Dashboard.** One `/api/dashboard` payload drives the goal card (progress, projection,
 today's marker), the mileage bars with a Weekly | Daily toggle (weekly is
@@ -95,8 +98,10 @@ tooltips and a collapsible data table. Charts follow the active filters; **Goal 
 always covers the whole calendar year** regardless of them.
 
 **Settings.** Annual goal miles, max HR, Pace Zone thresholds (mm:ss), Privacy Zones, and
-the Start Zone toggle. Effort and Pace Zones are computed at read time, never stored, so
-editing max HR or a threshold re-buckets all history instantly.
+the Start Zone toggle. Each Settings value is declared exactly once in `settings.py` —
+default, encode, and decode in one table — so adding a setting is a one-line addition.
+Effort and Pace Zones are computed at read time, never stored, so editing max HR or a
+threshold re-buckets all history instantly.
 
 **Art export.** In Timelapse mode, ⏺ Record plays exactly one full loop and captures what
 the map shows (composited basemap + trails via MediaRecorder); the clock stops the
@@ -135,9 +140,12 @@ race-training goals.
 | `GET/PUT /api/settings` | Goal, max HR, pace thresholds, privacy/start zones |
 | `POST /api/export/mp4` | Transcode a recorded WebM to MP4 |
 
-Shared seams worth knowing: `store.py` holds every SQL statement (with a `:memory:`
-adapter for tests), `effort.py` owns the one HR bucketing, `timeline.ts` owns all
-Timelapse time math, and `trackpoint.py`/`trackpoint.ts` define the
+Shared seams worth knowing: `store.py` holds every SQL statement — data access only; meta
+assembly and dashboard composition live in the API layer (`api/runs.py` and
+`api/dashboard.py`). `settings.py` declares every Settings value once. `effort.py` owns
+the one HR bucketing, `zones.ts` derives the frontend zone config from `/api/meta` (null
+until meta lands — no local defaults), `timelapse.ts` and `timeline.ts` own all playback
+and time math, and `trackpoint.py`/`trackpoint.ts` define the
 `[lon, lat, t_offset_s, hr, pace_s_per_mi]` wire tuple once per side of the HTTP seam.
 
 ## Data & privacy

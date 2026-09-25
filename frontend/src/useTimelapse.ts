@@ -1,20 +1,20 @@
-/** The Timelapse module: one clock (rAF loop, wrap-around, speed) and the
- * record-one-full-loop flow behind a single interface.
+/** React adapter for the Timelapse clock: pumps `tick` from
+ * requestAnimationFrame and mirrors the clock's state into render.
  *
- * The clock's tick is the only code that knows where the loop ends
- * (timeline.advance), so a recording stops exactly at the boundary — no
- * consumer polls the time and races the wrap. Frame capture and export live
- * in recording.ts; the map hands its pixels across CaptureSurface.
+ * All playback rules — wrap-around, speed, stopping a recording exactly at
+ * the loop boundary — live in timelapse.ts, where a test can drive them
+ * without a browser. Nothing here decides anything.
  */
 
 import { useEffect, useRef, useState } from "react";
+import type { CaptureSurface, RecorderState } from "./recording";
 import {
-  startRecording,
-  type CaptureSurface,
-  type RecorderState,
-  type Recording,
-} from "./recording";
-import { advance, type Timeline } from "./timeline";
+  createClock,
+  INITIAL_CLOCK,
+  type Clock,
+  type ClockState,
+  type ClockTimeline,
+} from "./timelapse";
 
 export interface Timelapse {
   time: number;
@@ -31,70 +31,37 @@ export interface Timelapse {
 }
 
 export function useTimelapse(
-  timeline: Pick<Timeline, "duration" | "tailPadding">,
+  timeline: ClockTimeline,
   active: boolean
 ): Timelapse {
-  const { duration, tailPadding } = timeline;
-  const [playing, setPlaying] = useState(false);
-  const [time, setTime] = useState(0);
-  const [speed, setSpeed] = useState(60);
-  const [recording, setRecording] = useState<RecorderState>("idle");
-  const timeRef = useRef(0);
-  const recRef = useRef<Recording | null>(null);
-  const rafRef = useRef<number>();
-
-  const seek = (t: number) => {
-    timeRef.current = t;
-    setTime(t);
-  };
+  const [state, setState] = useState<ClockState>(INITIAL_CLOCK);
+  const clockRef = useRef<Clock | null>(null);
+  if (!clockRef.current) clockRef.current = createClock(timeline, setState);
+  const clock = clockRef.current;
+  // the tracks or the timing mode changed under a running clock
+  clock.retarget(timeline);
 
   useEffect(() => {
-    if (!playing || !active) return;
+    if (!state.playing || !active) return;
     let last = performance.now();
-    const tick = (now: number) => {
-      const dt = (now - last) / 1000;
+    let raf = requestAnimationFrame(function frame(now) {
+      clock.tick((now - last) / 1000);
       last = now;
-      const next = advance(timeRef.current, dt * speed, { duration, tailPadding });
-      if (next.atEnd && recRef.current) {
-        recRef.current.stop();
-        recRef.current = null;
-        seek(duration);
-        setPlaying(false);
-        return;
-      }
-      seek(next.time);
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current!);
-  }, [playing, active, speed, duration, tailPadding]);
-
-  const record = (surface: CaptureSurface) => {
-    const rec = startRecording(surface, setRecording);
-    if (!rec) return;
-    recRef.current = rec;
-    seek(0);
-    setPlaying(true);
-  };
-
-  const stopRecording = () => {
-    recRef.current?.stop();
-    recRef.current = null;
-  };
+      raf = requestAnimationFrame(frame);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [state.playing, active, clock]);
 
   return {
-    time,
-    playing,
-    speed,
-    setPlaying,
-    setSpeed,
-    seek,
-    reset: () => {
-      seek(0);
-      setPlaying(true);
-    },
-    recording,
-    record,
-    stopRecording,
+    time: state.time,
+    playing: state.playing,
+    speed: state.speed,
+    recording: state.recording,
+    setPlaying: clock.setPlaying,
+    setSpeed: clock.setSpeed,
+    seek: clock.seek,
+    reset: clock.reset,
+    record: clock.record,
+    stopRecording: clock.stopRecording,
   };
 }

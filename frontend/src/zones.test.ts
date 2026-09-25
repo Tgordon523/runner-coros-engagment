@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { parsePaceThresholds } from "./SettingsPanel";
-import { fmtPace, hrZone, paceZone, zoneLabels, zoneRanges, type ZoneConfig } from "./zones";
+import type { Meta } from "./types";
+import {
+  fmtPace,
+  hrZone,
+  paceZone,
+  zoneConfig,
+  zoneLabels,
+  zoneRanges,
+  type ZoneConfig,
+} from "./zones";
 
 const CFG: ZoneConfig = {
   maxHr: 190,
@@ -8,6 +17,27 @@ const CFG: ZoneConfig = {
   effortNames: ["easy", "moderate", "hard", "max"],
   paceBoundsSPerMi: [510, 570, 630],
 };
+
+describe("zoneConfig — the bucketing comes from meta, never from here", () => {
+  it("is null until meta lands, with no local defaults to fall back on", () => {
+    expect(zoneConfig(null)).toBeNull();
+  });
+
+  it("takes every bound from what the backend served", () => {
+    const meta = {
+      max_hr: 180,
+      effort_bounds_pct: [0.6, 0.75, 0.85],
+      efforts: ["easy", "moderate", "hard", "max"],
+      pace_zone_s_per_mi: [510, 570, 630],
+    } as Meta;
+    expect(zoneConfig(meta)).toEqual({
+      maxHr: 180,
+      effortBoundsPct: [0.6, 0.75, 0.85],
+      effortNames: ["easy", "moderate", "hard", "max"],
+      paceBoundsSPerMi: [510, 570, 630],
+    });
+  });
+});
 
 describe("hrZone — mirrors backend Effort boundaries at max HR 190", () => {
   it("buckets with inclusive lower bounds (133/152/171)", () => {

@@ -36,6 +36,10 @@ _Avoid_: Active day
 A user-adjustable number of miles to achieve in the calendar year, against which on-track status is projected. Goal status always covers all runs in the year, regardless of active filters.
 _Avoid_: Plan, target pace
 
+**Settings**:
+The user-adjustable values the app reads at request time — max HR, Pace Zone thresholds, the annual Goal, Privacy Zones, and the Start Zone toggle. Each is declared exactly once, with its default and how it is stored, so changing one re-derives every view it feeds instead of rewriting stored Runs. Distinct from deploy-time configuration (data paths, credentials, timezone), which is not user-adjustable.
+_Avoid_: Preferences, options, config (config means the deploy-time kind)
+
 **Privacy Zone**:
 A configured radius around a saved location (e.g., home); track points inside it are trimmed from exported art but kept in local views.
 _Avoid_: Blur, hidden area
